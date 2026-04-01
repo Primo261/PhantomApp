@@ -1,16 +1,14 @@
 package top.niunaijun.blackbox.fake.service;
 
-
 import java.lang.reflect.Method;
 
 import black.android.os.BRIDeviceIdentifiersPolicyServiceStub;
 import black.android.os.BRServiceManager;
-import top.niunaijun.blackbox.BlackBoxCore;
+import top.niunaijun.blackbox.app.BActivityThread;
+import top.niunaijun.blackbox.fake.frameworks.FingerprintManager;
 import top.niunaijun.blackbox.fake.hook.BinderInvocationStub;
 import top.niunaijun.blackbox.fake.hook.MethodHook;
 import top.niunaijun.blackbox.fake.hook.ProxyMethod;
-import top.niunaijun.blackbox.utils.Md5Utils;
-
 
 public class IDeviceIdentifiersPolicyProxy extends BinderInvocationStub {
 
@@ -20,7 +18,9 @@ public class IDeviceIdentifiersPolicyProxy extends BinderInvocationStub {
 
     @Override
     protected Object getWho() {
-        return BRIDeviceIdentifiersPolicyServiceStub.get().asInterface(BRServiceManager.get().getService("device_identifiers"));
+        return BRIDeviceIdentifiersPolicyServiceStub.get().asInterface(
+                BRServiceManager.get().getService("device_identifiers")
+        );
     }
 
     @Override
@@ -34,12 +34,10 @@ public class IDeviceIdentifiersPolicyProxy extends BinderInvocationStub {
     }
 
     @ProxyMethod("getSerialForPackage")
-    public static class x extends MethodHook {
+    public static class GetSerialForPackage extends MethodHook {
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
-
-
-            return Md5Utils.md5(BlackBoxCore.getHostPkg());
+            return FingerprintManager.get().getSerial(BActivityThread.getUserId());
         }
     }
 }

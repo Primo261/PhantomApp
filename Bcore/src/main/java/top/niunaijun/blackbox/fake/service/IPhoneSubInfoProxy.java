@@ -3,11 +3,12 @@ package top.niunaijun.blackbox.fake.service;
 import java.lang.reflect.Method;
 
 import black.android.telephony.BRTelephonyManager;
+import top.niunaijun.blackbox.app.BActivityThread;
+import top.niunaijun.blackbox.fake.frameworks.FingerprintManager;
 import top.niunaijun.blackbox.fake.hook.ClassInvocationStub;
 import top.niunaijun.blackbox.fake.hook.MethodHook;
 import top.niunaijun.blackbox.fake.hook.ProxyMethod;
 import top.niunaijun.blackbox.utils.MethodParameterUtils;
-
 
 public class IPhoneSubInfoProxy extends ClassInvocationStub {
     public static final String TAG = "IPhoneSubInfoProxy";
@@ -42,12 +43,51 @@ public class IPhoneSubInfoProxy extends ClassInvocationStub {
         return false;
     }
 
-
     @ProxyMethod("getLine1NumberForSubscriber")
-    public static class getLine1NumberForSubscriber extends MethodHook {
+    public static class GetLine1NumberForSubscriber extends MethodHook {
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
             return null;
+        }
+    }
+
+    @ProxyMethod("getImeiForSubscriber")
+    public static class GetImeiForSubscriber extends MethodHook {
+        @Override
+        protected Object hook(Object who, Method method, Object[] args) throws Throwable {
+            return FingerprintManager.get().getImei(BActivityThread.getUserId());
+        }
+    }
+
+    @ProxyMethod("getMeidForSubscriber")
+    public static class GetMeidForSubscriber extends MethodHook {
+        @Override
+        protected Object hook(Object who, Method method, Object[] args) throws Throwable {
+            return FingerprintManager.get().getMeid(BActivityThread.getUserId());
+        }
+    }
+
+    @ProxyMethod("getSubscriberIdForSubscriber")
+    public static class GetSubscriberIdForSubscriber extends MethodHook {
+        @Override
+        protected Object hook(Object who, Method method, Object[] args) throws Throwable {
+            return FingerprintManager.get().getImsi(BActivityThread.getUserId());
+        }
+    }
+
+    @ProxyMethod("getIccSerialNumberForSubscriber")
+    public static class GetIccSerialNumberForSubscriber extends MethodHook {
+        @Override
+        protected Object hook(Object who, Method method, Object[] args) throws Throwable {
+            return FingerprintManager.get().getIccSerial(BActivityThread.getUserId());
+        }
+    }
+
+    @ProxyMethod("getDeviceIdForPhone")
+    public static class GetDeviceIdForPhone extends MethodHook {
+        @Override
+        protected Object hook(Object who, Method method, Object[] args) throws Throwable {
+            return FingerprintManager.get().getImei(BActivityThread.getUserId());
         }
     }
 }
