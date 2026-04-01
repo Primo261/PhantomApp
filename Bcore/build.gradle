@@ -92,3 +92,37 @@ dependencies {
 
     
 }
+
+// Fix for "illegal unicode escape" error in AIDL-generated Java files on Windows.
+// The AIDL tool generates a comment containing the absolute path to the .aidl file.
+// On Windows, if the path contains "user", it generates "\user", which the 
+// Java compiler misinterprets as an invalid Unicode escape sequence (\u).
+tasks.withType(JavaCompile).configureEach { compileTask ->
+    compileTask.doFirst {
+        // Use the modern way to get build directory if available, or fallback
+        File buildDir = project.layout.buildDirectory.asFile.get()
+        File aidlDir = new File(buildDir, "generated/aidl_source_output_dir")
+        if (aidlDir.exists()) {
+            aidlDir.eachFileRecurse { f ->
+                if (f.name.endsWith(".java")) {
+                    String content = f.getText("UTF-8")
+                    if (content.contains(" * Using:") && (content.contains("\\u") || content.contains("\\U") || content.contains("\\a") || content.contains("\\A"))) {
+                        List<String> newLines = []
+                        content.eachLine { line ->
+                            if (line.contains(" * Using:")) {
+                                // Replace backslashes with forward slashes in the path comment
+                                newLines.add(line.replace("\\", "/"))
+                            } else {
+                                newLines.add(line)
+                            }
+                        }
+                        String newContent = newLines.join("\n")
+                        if (newContent != content) {
+                            f.write(newContent, "UTF-8")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

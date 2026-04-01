@@ -49,6 +49,7 @@ import top.niunaijun.blackbox.entity.pm.InstallResult;
 
 import top.niunaijun.blackbox.fake.delegate.ContentProviderDelegate;
 import top.niunaijun.blackbox.fake.frameworks.BActivityManager;
+import top.niunaijun.blackbox.fake.frameworks.FingerprintManager;
 import top.niunaijun.blackbox.fake.frameworks.BJobManager;
 import top.niunaijun.blackbox.fake.frameworks.BPackageManager;
 import top.niunaijun.blackbox.fake.frameworks.BStorageManager;
@@ -850,6 +851,7 @@ public class BlackBoxCore extends ClientConfiguration {
         }
 
         sContext = context;
+        FingerprintManager.init(context);
         mClientConfiguration = clientConfiguration;
         
         

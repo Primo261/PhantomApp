@@ -1,18 +1,16 @@
 package top.niunaijun.blackbox.fake.service;
 
-import android.os.Bundle;
 import android.provider.Settings;
 import android.util.Log;
 
 import java.lang.reflect.Method;
 
-import top.niunaijun.blackbox.BlackBoxCore;
 import top.niunaijun.blackbox.app.BActivityThread;
+import top.niunaijun.blackbox.fake.frameworks.FingerprintManager;
 import top.niunaijun.blackbox.fake.hook.ClassInvocationStub;
 import top.niunaijun.blackbox.fake.hook.MethodHook;
 import top.niunaijun.blackbox.fake.hook.ProxyMethod;
 import top.niunaijun.blackbox.utils.Slog;
-
 
 public class ISettingsProviderProxy extends ClassInvocationStub {
     public static final String TAG = "ISettingsProviderProxy";
@@ -40,22 +38,21 @@ public class ISettingsProviderProxy extends ClassInvocationStub {
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
             try {
-                
                 if (args != null && args.length > 0) {
                     String key = (String) args[0];
+                    if (Settings.Secure.ANDROID_ID.equals(key)) {
+                        return FingerprintManager.get().getAndroidId(BActivityThread.getUserId());
+                    }
                     if (key != null && key.contains("feature_flag")) {
-                        Slog.d(TAG, "Intercepting feature flag query: " + key + ", returning safe default");
-                        return "true"; 
+                        return "true";
                     }
                 }
-                
-                
                 return method.invoke(who, args);
             } catch (Exception e) {
                 String errorMsg = e.getMessage();
                 if (errorMsg != null && errorMsg.contains("Calling uid") && errorMsg.contains("doesn't match source uid")) {
-                    Slog.w(TAG, "UID mismatch in getStringForUser, returning safe default: " + errorMsg);
-                    return "true"; 
+                    Slog.w(TAG, "UID mismatch in getStringForUser: " + errorMsg);
+                    return "true";
                 }
                 throw e;
             }
@@ -67,22 +64,21 @@ public class ISettingsProviderProxy extends ClassInvocationStub {
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
             try {
-                
                 if (args != null && args.length > 0) {
                     String key = (String) args[0];
+                    if (Settings.Secure.ANDROID_ID.equals(key)) {
+                        return FingerprintManager.get().getAndroidId(BActivityThread.getUserId());
+                    }
                     if (key != null && key.contains("feature_flag")) {
-                        Slog.d(TAG, "Intercepting feature flag query: " + key + ", returning safe default");
-                        return "true"; 
+                        return "true";
                     }
                 }
-                
-                
                 return method.invoke(who, args);
             } catch (Exception e) {
                 String errorMsg = e.getMessage();
                 if (errorMsg != null && errorMsg.contains("Calling uid") && errorMsg.contains("doesn't match source uid")) {
-                    Slog.w(TAG, "UID mismatch in getString, returning safe default: " + errorMsg);
-                    return "true"; 
+                    Slog.w(TAG, "UID mismatch in getString: " + errorMsg);
+                    return "true";
                 }
                 throw e;
             }
@@ -98,8 +94,7 @@ public class ISettingsProviderProxy extends ClassInvocationStub {
             } catch (Exception e) {
                 String errorMsg = e.getMessage();
                 if (errorMsg != null && errorMsg.contains("Calling uid") && errorMsg.contains("doesn't match source uid")) {
-                    Slog.w(TAG, "UID mismatch in getIntForUser, returning safe default: " + errorMsg);
-                    return 1; 
+                    return 1;
                 }
                 throw e;
             }
@@ -115,8 +110,7 @@ public class ISettingsProviderProxy extends ClassInvocationStub {
             } catch (Exception e) {
                 String errorMsg = e.getMessage();
                 if (errorMsg != null && errorMsg.contains("Calling uid") && errorMsg.contains("doesn't match source uid")) {
-                    Slog.w(TAG, "UID mismatch in getInt, returning safe default: " + errorMsg);
-                    return 1; 
+                    return 1;
                 }
                 throw e;
             }
@@ -132,8 +126,7 @@ public class ISettingsProviderProxy extends ClassInvocationStub {
             } catch (Exception e) {
                 String errorMsg = e.getMessage();
                 if (errorMsg != null && errorMsg.contains("Calling uid") && errorMsg.contains("doesn't match source uid")) {
-                    Slog.w(TAG, "UID mismatch in getLongForUser, returning safe default: " + errorMsg);
-                    return 1L; 
+                    return 1L;
                 }
                 throw e;
             }
@@ -149,8 +142,7 @@ public class ISettingsProviderProxy extends ClassInvocationStub {
             } catch (Exception e) {
                 String errorMsg = e.getMessage();
                 if (errorMsg != null && errorMsg.contains("Calling uid") && errorMsg.contains("doesn't match source uid")) {
-                    Slog.w(TAG, "UID mismatch in getLong, returning safe default: " + errorMsg);
-                    return 1L; 
+                    return 1L;
                 }
                 throw e;
             }
@@ -166,8 +158,7 @@ public class ISettingsProviderProxy extends ClassInvocationStub {
             } catch (Exception e) {
                 String errorMsg = e.getMessage();
                 if (errorMsg != null && errorMsg.contains("Calling uid") && errorMsg.contains("doesn't match source uid")) {
-                    Slog.w(TAG, "UID mismatch in getFloatForUser, returning safe default: " + errorMsg);
-                    return 1.0f; 
+                    return 1.0f;
                 }
                 throw e;
             }
@@ -183,8 +174,7 @@ public class ISettingsProviderProxy extends ClassInvocationStub {
             } catch (Exception e) {
                 String errorMsg = e.getMessage();
                 if (errorMsg != null && errorMsg.contains("Calling uid") && errorMsg.contains("doesn't match source uid")) {
-                    Slog.w(TAG, "UID mismatch in getFloat, returning safe default: " + errorMsg);
-                    return 1.0f; 
+                    return 1.0f;
                 }
                 throw e;
             }
