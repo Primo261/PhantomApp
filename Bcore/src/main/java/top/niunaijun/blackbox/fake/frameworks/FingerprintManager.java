@@ -2,13 +2,17 @@ package top.niunaijun.blackbox.fake.frameworks;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.util.Log;
 
 import java.util.Random;
 
+import top.niunaijun.blackbox.BlackBoxCore;
+
 public class FingerprintManager {
 
+    private static final String TAG = "FingerprintManager";
     private static final String PREF_NAME = "phantom_fingerprint";
-    private static FingerprintManager sInstance;
+    private static volatile FingerprintManager sInstance;
     private final Context mContext;
 
     // Clés de stockage
@@ -26,17 +30,48 @@ public class FingerprintManager {
         mContext = context.getApplicationContext();
     }
 
+    /**
+     * Auto-initialise si nécessaire — fonctionne dans TOUS les processus
+     * (host process ET slot process)
+     */
     public static FingerprintManager get() {
+        if (sInstance == null) {
+            synchronized (FingerprintManager.class) {
+                if (sInstance == null) {
+                    try {
+                        Context ctx = BlackBoxCore.getContext();
+                        if (ctx != null) {
+                            sInstance = new FingerprintManager(ctx);
+                            Log.d(TAG, "Auto-initialized in process: "
+                                + android.os.Process.myPid());
+                        } else {
+                            Log.w(TAG, "BlackBoxCore.getContext() returned null");
+                        }
+                    } catch (Exception e) {
+                        Log.e(TAG, "Auto-init failed: " + e.getMessage());
+                    }
+                }
+            }
+        }
         return sInstance;
     }
 
+    /**
+     * Init explicite depuis BlackBoxCore.doAttachBaseContext
+     * Garde pour compatibilité — get() s'auto-initialise aussi
+     */
     public static void init(Context context) {
         if (sInstance == null) {
-            sInstance = new FingerprintManager(context);
+            synchronized (FingerprintManager.class) {
+                if (sInstance == null) {
+                    sInstance = new FingerprintManager(context);
+                    Log.d(TAG, "Initialized explicitly");
+                }
+            }
         }
     }
 
-    // ─── Getters publics ───────────────────────────────────────────
+    // ─── Getters publics ─────────────────────────────────────────────────────
 
     public String getImei(int userId) {
         return getOrCreate(KEY_IMEI + userId, () -> generateImei());
@@ -74,7 +109,7 @@ public class FingerprintManager {
         return getOrCreate(KEY_BUILD_FP + userId, () -> generateBuildFingerprint());
     }
 
-    // ─── Reset complet d'un slot ───────────────────────────────────
+    // ─── Reset complet d'un slot ──────────────────────────────────────────────
 
     public void resetSlot(int userId) {
         SharedPreferences.Editor editor = prefs().edit();
@@ -88,41 +123,35 @@ public class FingerprintManager {
         editor.remove(KEY_SERIAL     + userId);
         editor.remove(KEY_BUILD_FP   + userId);
         editor.apply();
+        Log.d(TAG, "Reset slot " + userId);
     }
 
-    // ─── Générateurs ───────────────────────────────────────────────
+    // ─── Générateurs ─────────────────────────────────────────────────────────
 
     private String generateImei() {
-        // Format IMEI : 15 chiffres avec Luhn valide
         Random r = new Random();
         StringBuilder sb = new StringBuilder();
-        // TAC aléatoire (8 chiffres)
-        int[] tac = {3,5,8,3,4,9,0,r.nextInt(10)};
+        int[] tac = {3,5,8,3,4,9,r.nextInt(10),r.nextInt(10)};
         for (int d : tac) sb.append(d);
-        // SNR 6 chiffres
         for (int i = 0; i < 6; i++) sb.append(r.nextInt(10));
-        // Checksum Luhn
         sb.append(luhn(sb.toString()));
         return sb.toString();
     }
 
     private String generateMeid() {
         Random r = new Random();
-        StringBuilder sb = new StringBuilder();
         String chars = "0123456789ABCDEF";
-        for (int i = 0; i < 14; i++) {
-            sb.append(chars.charAt(r.nextInt(chars.length())));
-        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < 14; i++) sb.append(chars.charAt(r.nextInt(chars.length())));
         return sb.toString();
     }
 
     private String generateImsi() {
-        // MCC + MNC + MSIN réalistes
         Random r = new Random();
-        String[] mnc = {"01","02","03","04","05","06","07","08","09","10"};
+        String[] mncs = {"01","02","03","04","05","06","07","08","09","10"};
         StringBuilder sb = new StringBuilder("20");
         sb.append(r.nextInt(9) + 1);
-        sb.append(mnc[r.nextInt(mnc.length)]);
+        sb.append(mncs[r.nextInt(mncs.length)]);
         for (int i = 0; i < 9; i++) sb.append(r.nextInt(10));
         return sb.toString();
     }
@@ -137,8 +166,8 @@ public class FingerprintManager {
 
     private String generateAndroidId() {
         Random r = new Random();
-        StringBuilder sb = new StringBuilder();
         String hex = "0123456789abcdef";
+        StringBuilder sb = new StringBuilder();
         for (int i = 0; i < 16; i++) sb.append(hex.charAt(r.nextInt(16)));
         return sb.toString();
     }
@@ -147,7 +176,7 @@ public class FingerprintManager {
         Random r = new Random();
         byte[] mac = new byte[6];
         r.nextBytes(mac);
-        // bit multicast à 0, bit local à 1
+        // bit multicast à 0, bit local à 1 → MAC administrée localement
         mac[0] = (byte) ((mac[0] & 0xFE) | 0x02);
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < mac.length; i++) {
@@ -167,25 +196,31 @@ public class FingerprintManager {
 
     private String generateBuildFingerprint() {
         Random r = new Random();
-        String[] brands = {"samsung", "xiaomi", "google", "oppo", "vivo"};
+        String[] brands = {"samsung", "google", "xiaomi", "oppo"};
         String[] versions = {"13", "14"};
         String brand = brands[r.nextInt(brands.length)];
         String ver = versions[r.nextInt(versions.length)];
         return brand + "/generic/" + brand + ":" + ver + "/release-keys";
     }
 
-    // ─── Utilitaires ───────────────────────────────────────────────
+    // ─── Utilitaires ──────────────────────────────────────────────────────────
 
     private interface Generator { String generate(); }
 
     private String getOrCreate(String key, Generator gen) {
-        SharedPreferences sp = prefs();
-        String val = sp.getString(key, null);
-        if (val == null) {
-            val = gen.generate();
-            sp.edit().putString(key, val).apply();
+        try {
+            SharedPreferences sp = prefs();
+            String val = sp.getString(key, null);
+            if (val == null || val.isEmpty()) {
+                val = gen.generate();
+                sp.edit().putString(key, val).apply();
+                Log.d(TAG, "Generated for key=" + key + " val=" + val);
+            }
+            return val;
+        } catch (Exception e) {
+            Log.e(TAG, "getOrCreate error for key=" + key + ": " + e.getMessage());
+            return gen.generate();
         }
-        return val;
     }
 
     private SharedPreferences prefs() {

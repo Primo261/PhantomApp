@@ -21,26 +21,27 @@ public class IBluetoothManagerProxy extends BinderInvocationStub {
 
     @Override
     protected Object getWho() {
-        IBinder binder = BRServiceManager.get().getService(Context.BLUETOOTH_SERVICE);
-        if (binder == null) return null;
-        return binder;
+        try {
+            IBinder binder = BRServiceManager.get().getService(Context.BLUETOOTH_SERVICE);
+            return binder;
+        } catch (Exception e) { return null; }
     }
 
     @Override
     protected void inject(Object baseInvocation, Object proxyInvocation) {
-        replaceSystemService(Context.BLUETOOTH_SERVICE);
+        try { replaceSystemService(Context.BLUETOOTH_SERVICE); }
+        catch (Exception e) { /* non-fatal */ }
     }
 
     @Override
-    public boolean isBadEnv() {
-        return false;
-    }
+    public boolean isBadEnv() { return false; }
 
     @ProxyMethod("getAddress")
     public static class GetAddress extends MethodHook {
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
-            return FingerprintManager.get().getBluetoothMac(BActivityThread.getUserId());
+            FingerprintManager fp = FingerprintManager.get();
+            return fp != null ? fp.getBluetoothMac(BActivityThread.getUserId()) : "02:00:00:00:00:00";
         }
     }
 

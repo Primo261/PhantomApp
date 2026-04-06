@@ -2,14 +2,11 @@ package top.niunaijun.blackbox.fake.service;
 
 import android.content.Context;
 import android.os.IBinder;
-import android.util.Log;
 
 import java.lang.reflect.Method;
-import java.util.List;
 
 import black.android.os.BRServiceManager;
 import black.com.android.internal.telephony.BRITelephonyStub;
-import top.niunaijun.blackbox.BlackBoxCore;
 import top.niunaijun.blackbox.app.BActivityThread;
 import top.niunaijun.blackbox.entity.location.BCell;
 import top.niunaijun.blackbox.fake.frameworks.BLocationManager;
@@ -17,6 +14,7 @@ import top.niunaijun.blackbox.fake.frameworks.FingerprintManager;
 import top.niunaijun.blackbox.fake.hook.BinderInvocationStub;
 import top.niunaijun.blackbox.fake.hook.MethodHook;
 import top.niunaijun.blackbox.fake.hook.ProxyMethod;
+import top.niunaijun.blackbox.utils.Slog;
 
 public class ITelephonyManagerProxy extends BinderInvocationStub {
     public static final String TAG = "ITelephonyManagerProxy";
@@ -37,15 +35,45 @@ public class ITelephonyManagerProxy extends BinderInvocationStub {
     }
 
     @Override
-    public boolean isBadEnv() {
-        return false;
+    public boolean isBadEnv() { return false; }
+
+    private static String safeImei() {
+        try {
+            FingerprintManager fp = FingerprintManager.get();
+            if (fp != null) return fp.getImei(BActivityThread.getUserId());
+        } catch (Exception e) { Slog.w(TAG, "safeImei: " + e.getMessage()); }
+        return "000000000000000";
+    }
+
+    private static String safeMeid() {
+        try {
+            FingerprintManager fp = FingerprintManager.get();
+            if (fp != null) return fp.getMeid(BActivityThread.getUserId());
+        } catch (Exception e) { Slog.w(TAG, "safeMeid: " + e.getMessage()); }
+        return "00000000000000";
+    }
+
+    private static String safeImsi() {
+        try {
+            FingerprintManager fp = FingerprintManager.get();
+            if (fp != null) return fp.getImsi(BActivityThread.getUserId());
+        } catch (Exception e) { Slog.w(TAG, "safeImsi: " + e.getMessage()); }
+        return "000000000000000";
+    }
+
+    private static String safeIcc() {
+        try {
+            FingerprintManager fp = FingerprintManager.get();
+            if (fp != null) return fp.getIccSerial(BActivityThread.getUserId());
+        } catch (Exception e) { Slog.w(TAG, "safeIcc: " + e.getMessage()); }
+        return "0000000000000000000";
     }
 
     @ProxyMethod("getDeviceId")
     public static class GetDeviceId extends MethodHook {
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
-            return FingerprintManager.get().getImei(BActivityThread.getUserId());
+            return safeImei();
         }
     }
 
@@ -53,7 +81,7 @@ public class ITelephonyManagerProxy extends BinderInvocationStub {
     public static class GetImeiForSlot extends MethodHook {
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
-            return FingerprintManager.get().getImei(BActivityThread.getUserId());
+            return safeImei();
         }
     }
 
@@ -61,7 +89,7 @@ public class ITelephonyManagerProxy extends BinderInvocationStub {
     public static class GetMeidForSlot extends MethodHook {
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
-            return FingerprintManager.get().getMeid(BActivityThread.getUserId());
+            return safeMeid();
         }
     }
 
@@ -69,7 +97,7 @@ public class ITelephonyManagerProxy extends BinderInvocationStub {
     public static class GetSubscriberId extends MethodHook {
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
-            return FingerprintManager.get().getImsi(BActivityThread.getUserId());
+            return safeImsi();
         }
     }
 
@@ -77,7 +105,7 @@ public class ITelephonyManagerProxy extends BinderInvocationStub {
     public static class GetDeviceIdWithFeature extends MethodHook {
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
-            return FingerprintManager.get().getImei(BActivityThread.getUserId());
+            return safeImei();
         }
     }
 
@@ -85,7 +113,7 @@ public class ITelephonyManagerProxy extends BinderInvocationStub {
     public static class GetSimSerialNumber extends MethodHook {
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
-            return FingerprintManager.get().getIccSerial(BActivityThread.getUserId());
+            return safeIcc();
         }
     }
 
@@ -93,7 +121,7 @@ public class ITelephonyManagerProxy extends BinderInvocationStub {
     public static class GetIccSerialNumber extends MethodHook {
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
-            return FingerprintManager.get().getIccSerial(BActivityThread.getUserId());
+            return safeIcc();
         }
     }
 
@@ -119,8 +147,8 @@ public class ITelephonyManagerProxy extends BinderInvocationStub {
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
             if (BLocationManager.isFakeLocationEnable()) {
                 BCell cell = BLocationManager.get().getCell(
-                        BActivityThread.getUserId(),
-                        BActivityThread.getAppPackageName()
+                    BActivityThread.getUserId(),
+                    BActivityThread.getAppPackageName()
                 );
                 if (cell != null) return null;
             }
@@ -134,15 +162,12 @@ public class ITelephonyManagerProxy extends BinderInvocationStub {
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
             if (BLocationManager.isFakeLocationEnable()) {
                 return BLocationManager.get().getAllCell(
-                        BActivityThread.getUserId(),
-                        BActivityThread.getAppPackageName()
+                    BActivityThread.getUserId(),
+                    BActivityThread.getAppPackageName()
                 );
             }
-            try {
-                return method.invoke(who, args);
-            } catch (Throwable e) {
-                return null;
-            }
+            try { return method.invoke(who, args); }
+            catch (Throwable e) { return null; }
         }
     }
 
@@ -158,11 +183,8 @@ public class ITelephonyManagerProxy extends BinderInvocationStub {
     public static class GetNetworkTypeForSubscriber extends MethodHook {
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
-            try {
-                return method.invoke(who, args);
-            } catch (Throwable e) {
-                return 0;
-            }
+            try { return method.invoke(who, args); }
+            catch (Throwable e) { return 0; }
         }
     }
 
@@ -170,9 +192,7 @@ public class ITelephonyManagerProxy extends BinderInvocationStub {
     public static class GetNeighboringCellInfo extends MethodHook {
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
-            if (BLocationManager.isFakeLocationEnable()) {
-                return null;
-            }
+            if (BLocationManager.isFakeLocationEnable()) return null;
             return method.invoke(who, args);
         }
     }

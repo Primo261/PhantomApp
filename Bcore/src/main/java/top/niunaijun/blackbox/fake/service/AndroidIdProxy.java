@@ -12,29 +12,30 @@ import top.niunaijun.blackbox.utils.Slog;
 public class AndroidIdProxy extends ClassInvocationStub {
     public static final String TAG = "AndroidIdProxy";
 
-    public AndroidIdProxy() {
-        super();
-    }
+    @Override
+    protected Object getWho() { return null; }
 
     @Override
-    protected Object getWho() {
-        return null;
-    }
+    protected void inject(Object baseInvocation, Object proxyInvocation) {}
 
     @Override
-    protected void inject(Object baseInvocation, Object proxyInvocation) {
-    }
+    public boolean isBadEnv() { return false; }
 
-    @Override
-    public boolean isBadEnv() {
-        return false;
+    private static String safeAndroidId() {
+        try {
+            FingerprintManager fp = FingerprintManager.get();
+            if (fp != null) return fp.getAndroidId(BActivityThread.getUserId());
+        } catch (Exception e) {
+            Slog.w(TAG, "safeAndroidId error: " + e.getMessage());
+        }
+        return "0000000000000000";
     }
 
     @ProxyMethod("getAndroidId")
     public static class GetAndroidId extends MethodHook {
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
-            return FingerprintManager.get().getAndroidId(BActivityThread.getUserId());
+            return safeAndroidId();
         }
     }
 
@@ -43,16 +44,20 @@ public class AndroidIdProxy extends ClassInvocationStub {
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
             try {
-                if (args != null && args.length > 0 && args[0] instanceof String) {
-                    String key = (String) args[0];
-                    if (key.contains("android_id") || key.contains("ANDROID_ID") ||
-                            key.contains("secure_id") || key.contains("device_id")) {
-                        return FingerprintManager.get().getAndroidId(BActivityThread.getUserId());
+                if (args != null) {
+                    for (Object arg : args) {
+                        if (arg instanceof String) {
+                            String key = (String) arg;
+                            if (key.contains("android_id") || key.contains("ANDROID_ID")
+                                    || key.contains("secure_id") || key.contains("device_id")) {
+                                return safeAndroidId();
+                            }
+                        }
                     }
                 }
                 return method.invoke(who, args);
             } catch (Exception e) {
-                return FingerprintManager.get().getAndroidId(BActivityThread.getUserId());
+                return safeAndroidId();
             }
         }
     }
@@ -62,19 +67,20 @@ public class AndroidIdProxy extends ClassInvocationStub {
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
             try {
-                if (args != null && args.length > 0 && args[0] instanceof String) {
-                    String key = (String) args[0];
-                    if (key.contains("android_id") || key.contains("ANDROID_ID") ||
-                            key.contains("secure_id") || key.contains("device_id")) {
-                        return Long.parseLong(
-                                FingerprintManager.get().getAndroidId(BActivityThread.getUserId()), 16
-                        );
+                if (args != null) {
+                    for (Object arg : args) {
+                        if (arg instanceof String) {
+                            String key = (String) arg;
+                            if (key.contains("android_id") || key.contains("ANDROID_ID")) {
+                                try {
+                                    return Long.parseLong(safeAndroidId(), 16);
+                                } catch (Exception ex) { return 0L; }
+                            }
+                        }
                     }
                 }
                 return method.invoke(who, args);
-            } catch (Exception e) {
-                return 0L;
-            }
+            } catch (Exception e) { return 0L; }
         }
     }
 
@@ -83,35 +89,20 @@ public class AndroidIdProxy extends ClassInvocationStub {
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
             try {
-                if (args != null && args.length > 0 && args[0] instanceof String) {
-                    String key = (String) args[0];
-                    if (key.contains("android_id") || key.contains("ANDROID_ID") ||
-                            key.contains("secure_id") || key.contains("device_id")) {
-                        return FingerprintManager.get().getAndroidId(BActivityThread.getUserId());
+                if (args != null) {
+                    for (Object arg : args) {
+                        if (arg instanceof String) {
+                            String key = (String) arg;
+                            if (key.contains("android_id") || key.contains("ANDROID_ID")
+                                    || key.contains("secure_id") || key.contains("device_id")) {
+                                return safeAndroidId();
+                            }
+                        }
                     }
                 }
                 return method.invoke(who, args);
             } catch (Exception e) {
-                return FingerprintManager.get().getAndroidId(BActivityThread.getUserId());
-            }
-        }
-    }
-
-    @ProxyMethod("read")
-    public static class Read extends MethodHook {
-        @Override
-        protected Object hook(Object who, Method method, Object[] args) throws Throwable {
-            try {
-                if (args != null && args.length > 0 && args[0] instanceof String) {
-                    String key = (String) args[0];
-                    if (key.contains("android_id") || key.contains("ANDROID_ID") ||
-                            key.contains("secure_id") || key.contains("device_id")) {
-                        return FingerprintManager.get().getAndroidId(BActivityThread.getUserId());
-                    }
-                }
-                return method.invoke(who, args);
-            } catch (Exception e) {
-                return FingerprintManager.get().getAndroidId(BActivityThread.getUserId());
+                return safeAndroidId();
             }
         }
     }

@@ -19,7 +19,7 @@ public class IDeviceIdentifiersPolicyProxy extends BinderInvocationStub {
     @Override
     protected Object getWho() {
         return BRIDeviceIdentifiersPolicyServiceStub.get().asInterface(
-                BRServiceManager.get().getService("device_identifiers")
+            BRServiceManager.get().getService("device_identifiers")
         );
     }
 
@@ -29,15 +29,14 @@ public class IDeviceIdentifiersPolicyProxy extends BinderInvocationStub {
     }
 
     @Override
-    public boolean isBadEnv() {
-        return false;
-    }
+    public boolean isBadEnv() { return false; }
 
     @ProxyMethod("getSerialForPackage")
     public static class GetSerialForPackage extends MethodHook {
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
-            return FingerprintManager.get().getSerial(BActivityThread.getUserId());
+            FingerprintManager fp = FingerprintManager.get();
+            return fp != null ? fp.getSerial(BActivityThread.getUserId()) : "PHANTOM000000";
         }
     }
 }

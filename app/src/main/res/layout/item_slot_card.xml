@@ -1,0 +1,216 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginStart="16dp"
+    android:layout_marginEnd="16dp"
+    android:layout_marginBottom="12dp"
+    app:cardBackgroundColor="#110F1D"
+    app:cardCornerRadius="16dp"
+    app:cardElevation="0dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <!-- Header row -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:paddingTop="12dp"
+            android:paddingBottom="8dp"
+            android:gravity="center_vertical">
+
+            <!-- Active dot -->
+            <TextView
+                android:id="@+id/slotDot"
+                android:layout_width="8dp"
+                android:layout_height="8dp"
+                android:layout_marginEnd="10dp"
+                android:background="@drawable/bg_slot_dot"/>
+
+            <!-- Slot name + fingerprint ID -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/tvSlotName"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Slot 1"
+                    android:textSize="13sp"
+                    android:textColor="#C4A8FF"
+                    android:textStyle="bold"/>
+
+                <TextView
+                    android:id="@+id/tvFpId"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="a3f2b1c4d5e6f7a8"
+                    android:textSize="10sp"
+                    android:textColor="#4A4060"
+                    android:fontFamily="monospace"/>
+
+            </LinearLayout>
+
+            <!-- Reset button -->
+            <TextView
+                android:id="@+id/btnReset"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:text="↺"
+                android:textSize="18sp"
+                android:textColor="#6C3FC7"
+                android:gravity="center"
+                android:background="@drawable/bg_icon_button"
+                android:contentDescription="Reset fingerprint"/>
+
+        </LinearLayout>
+
+        <!-- Fingerprint chips -->
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:scrollbars="none"
+            android:overScrollMode="never">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:paddingBottom="8dp">
+
+                <!-- IMEI chip -->
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:background="@drawable/bg_fp_chip"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp"
+                    android:paddingTop="4dp"
+                    android:paddingBottom="4dp"
+                    android:layout_marginEnd="6dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="IMEI"
+                        android:textSize="9sp"
+                        android:textColor="#4A3870"
+                        android:textAllCaps="true"
+                        android:letterSpacing="0.05"/>
+
+                    <TextView
+                        android:id="@+id/tvImei"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="35834923···"
+                        android:textSize="10sp"
+                        android:textColor="#7A5AB0"
+                        android:fontFamily="monospace"/>
+
+                </LinearLayout>
+
+                <!-- MAC chip -->
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:background="@drawable/bg_fp_chip"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp"
+                    android:paddingTop="4dp"
+                    android:paddingBottom="4dp"
+                    android:layout_marginEnd="6dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="MAC"
+                        android:textSize="9sp"
+                        android:textColor="#4A3870"
+                        android:textAllCaps="true"
+                        android:letterSpacing="0.05"/>
+
+                    <TextView
+                        android:id="@+id/tvMac"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="02:A3:F2···"
+                        android:textSize="10sp"
+                        android:textColor="#7A5AB0"
+                        android:fontFamily="monospace"/>
+
+                </LinearLayout>
+
+                <!-- Android ID chip -->
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:background="@drawable/bg_fp_chip"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp"
+                    android:paddingTop="4dp"
+                    android:paddingBottom="4dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Android ID"
+                        android:textSize="9sp"
+                        android:textColor="#4A3870"
+                        android:textAllCaps="true"
+                        android:letterSpacing="0.05"/>
+
+                    <TextView
+                        android:id="@+id/tvAndroidId"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="a3f2b1c4···"
+                        android:textSize="10sp"
+                        android:textColor="#7A5AB0"
+                        android:fontFamily="monospace"/>
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+        </HorizontalScrollView>
+
+        <!-- Divider -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="0.5dp"
+            android:layout_marginStart="14dp"
+            android:layout_marginEnd="14dp"
+            android:background="#1E1A2E"/>
+
+        <!-- Apps RecyclerView -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rvAppsInSlot"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="74dp"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="12dp"
+            android:clipToPadding="false"
+            android:overScrollMode="never"/>
+
+    </LinearLayout>
+
+</androidx.cardview.widget.CardView>
