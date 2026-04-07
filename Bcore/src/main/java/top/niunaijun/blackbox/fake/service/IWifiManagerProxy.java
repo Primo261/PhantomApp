@@ -3,6 +3,7 @@ package top.niunaijun.blackbox.fake.service;
 import android.content.Context;
 import android.net.wifi.WifiInfo;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
 import black.android.net.wifi.BRIWifiManagerStub;
@@ -45,31 +46,73 @@ public class IWifiManagerProxy extends BinderInvocationStub {
             try {
                 WifiInfo wifiInfo = (WifiInfo) method.invoke(who, args);
                 if (wifiInfo == null) return null;
-
-                FingerprintManager fp = FingerprintManager.get();
-                if (fp == null) return wifiInfo;
-
-                int userId = BActivityThread.getUserId();
-                String fakeMac = fp.getWifiMac(userId);
-
-                try { BRWifiInfo.get(wifiInfo)._set_mBSSID(fakeMac); }
-                catch (Exception e) { Slog.w(TAG, "setBSSID failed: " + e.getMessage()); }
-
-                try { BRWifiInfo.get(wifiInfo)._set_mMacAddress(fakeMac); }
-                catch (Exception e) { Slog.w(TAG, "setMacAddress failed: " + e.getMessage()); }
-
-                try {
-                    BRWifiInfo.get(wifiInfo)._set_mWifiSsid(
-                        BRWifiSsid.get().createFromAsciiEncoded("PhantomWifi_" + userId)
-                    );
-                } catch (Exception e) { Slog.w(TAG, "setSSID failed: " + e.getMessage()); }
-
-                Slog.d(TAG, "Spoofed WiFi MAC → " + fakeMac + " slot=" + userId);
-                return wifiInfo;
+                return spoofWifiInfo(wifiInfo);
             } catch (Exception e) {
-                Slog.w(TAG, "getConnectionInfo hook error: " + e.getMessage());
-                return method.invoke(who, args);
+                Slog.w(TAG, "getConnectionInfo error: " + e.getMessage());
+                try { return method.invoke(who, args); }
+                catch (Exception e2) { return null; }
             }
         }
+    }
+
+    @ProxyMethod("getPrivilegedConnectedNetwork")
+    public static class GetPrivilegedConnectedNetwork extends MethodHook {
+        @Override
+        protected Object hook(Object who, Method method, Object[] args) throws Throwable {
+            try {
+                WifiInfo wifiInfo = (WifiInfo) method.invoke(who, args);
+                if (wifiInfo == null) return null;
+                return spoofWifiInfo(wifiInfo);
+            } catch (Exception e) {
+                try { return method.invoke(who, args); }
+                catch (Exception e2) { return null; }
+            }
+        }
+    }
+
+    // Spoofe toutes les valeurs MAC dans un WifiInfo
+    private static WifiInfo spoofWifiInfo(WifiInfo wifiInfo) {
+        FingerprintManager fp = FingerprintManager.get();
+        if (fp == null) return wifiInfo;
+
+        int userId = BActivityThread.getUserId();
+        String fakeMac = fp.getWifiMac(userId);
+
+        // Méthode 1 — via BRWifiInfo reflection wrappers
+        try { BRWifiInfo.get(wifiInfo)._set_mBSSID(fakeMac); }
+        catch (Throwable ignored) {}
+
+        try { BRWifiInfo.get(wifiInfo)._set_mMacAddress(fakeMac); }
+        catch (Throwable ignored) {}
+
+        // Méthode 2 — via réflexion directe sur les champs WifiInfo
+        setWifiField(wifiInfo, "mBSSID",      fakeMac);
+        setWifiField(wifiInfo, "mMacAddress", fakeMac);
+
+        // SSID par slot
+        try {
+            BRWifiInfo.get(wifiInfo)._set_mWifiSsid(
+                BRWifiSsid.get().createFromAsciiEncoded("Phantom_" + userId)
+            );
+        } catch (Throwable ignored) {}
+
+        Slog.d(TAG, "WiFi MAC spoofed → " + fakeMac + " slot=" + userId);
+        return wifiInfo;
+    }
+
+    private static void setWifiField(Object obj, String fieldName, String value) {
+        try {
+            Class<?> clazz = obj.getClass();
+            while (clazz != null) {
+                try {
+                    Field f = clazz.getDeclaredField(fieldName);
+                    f.setAccessible(true);
+                    f.set(obj, value);
+                    return;
+                } catch (NoSuchFieldException e) {
+                    clazz = clazz.getSuperclass();
+                }
+            }
+        } catch (Exception ignored) {}
     }
 }

@@ -8,14 +8,16 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.appcompat.widget.PopupMenu
 import androidx.recyclerview.widget.RecyclerView
 import top.niunaijun.blackboxa.R
 
 class SlotAppAdapter(
     private val context: Context,
-    private val apps: List<ApplicationInfo>,
+    private val apps: MutableList<ApplicationInfo>,
     private val onAppClick: (ApplicationInfo) -> Unit,
-    private val onAddClick: () -> Unit
+    private val onAddClick: () -> Unit,
+    private val onAppDelete: (ApplicationInfo) -> Unit
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     companion object {
@@ -42,17 +44,17 @@ class SlotAppAdapter(
         if (holder is AppViewHolder && position < apps.size) {
             holder.bind(apps[position])
         } else if (holder is AddViewHolder) {
-            holder.itemView.findViewById<LinearLayout>(R.id.btnAddApp)?.setOnClickListener {
-                onAddClick()
-            }
+            holder.itemView.findViewById<LinearLayout>(R.id.btnAddApp)
+                ?.setOnClickListener { onAddClick() }
         }
     }
 
     inner class AppViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         private val ivIcon: ImageView = view.findViewById(R.id.ivAppIcon)
-        private val tvName: TextView = view.findViewById(R.id.tvAppName)
+        private val tvName: TextView  = view.findViewById(R.id.tvAppName)
 
         fun bind(app: ApplicationInfo) {
+            // Load icon safely
             try {
                 val pm = context.packageManager
                 ivIcon.setImageDrawable(pm.getApplicationIcon(app.packageName))
@@ -65,7 +67,37 @@ class SlotAppAdapter(
                 }
                 tvName.text = app.packageName.substringAfterLast(".")
             }
+
+            // Clic simple → lance l'app
             itemView.setOnClickListener { onAppClick(app) }
+
+            // Long press → menu Supprimer
+            itemView.setOnLongClickListener {
+                showDeleteMenu(app)
+                true
+            }
+        }
+
+        private fun showDeleteMenu(app: ApplicationInfo) {
+            try {
+                val popup = PopupMenu(context, itemView)
+                popup.menu.add(0, 1, 0, "🗑 Désinstaller du slot")
+                popup.setOnMenuItemClickListener { item ->
+                    if (item.itemId == 1) {
+                        onAppDelete(app)
+                        true
+                    } else false
+                }
+                popup.show()
+            } catch (e: Exception) {
+                // Fallback dialog si popup échoue
+                android.app.AlertDialog.Builder(context)
+                    .setTitle("Désinstaller")
+                    .setMessage("Supprimer ${app.packageName.substringAfterLast(".")} de ce slot ?")
+                    .setPositiveButton("Supprimer") { _, _ -> onAppDelete(app) }
+                    .setNegativeButton("Annuler", null)
+                    .show()
+            }
         }
     }
 

@@ -83,6 +83,7 @@ import top.niunaijun.blackbox.fake.service.IWifiManagerProxy;
 import top.niunaijun.blackbox.fake.service.IBluetoothManagerProxy;
 import top.niunaijun.blackbox.fake.service.IWifiScannerProxy;
 import top.niunaijun.blackbox.fake.service.IWindowManagerProxy;
+import top.niunaijun.blackbox.fake.service.PhantomContentProviderProxy;
 import top.niunaijun.blackbox.fake.service.context.ContentServiceStub;
 import top.niunaijun.blackbox.fake.service.context.RestrictionsManagerStub;
 import top.niunaijun.blackbox.fake.service.libcore.OsStub;
@@ -96,7 +97,6 @@ public class HookManager {
     public static final String TAG = "HookManager";
 
     private static final HookManager sHookManager = new HookManager();
-
     private final Map<Class<?>, IInjectHook> mInjectors = new HashMap<>();
 
     public static HookManager get() {
@@ -156,6 +156,9 @@ public class HookManager {
             addInjector(new IConnectivityManagerProxy());
             addInjector(new IDnsResolverProxy());
             addInjector(new IAttributionSourceProxy());
+            // ← PhantomContentProviderProxy AVANT IContentProviderProxy
+            // pour intercepter android_id via ContentProvider URI
+            addInjector(new PhantomContentProviderProxy());
             addInjector(new IContentProviderProxy());
             addInjector(new ISettingsSystemProxy());
             addInjector(new ISystemSensorManagerProxy());
