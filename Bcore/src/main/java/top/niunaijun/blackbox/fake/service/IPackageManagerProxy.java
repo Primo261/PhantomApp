@@ -271,7 +271,12 @@ public class IPackageManagerProxy extends BinderInvocationStub {
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
             int flags = MethodParameterUtils.toInt(args[0]);
             List<ApplicationInfo> installedApplications = BlackBoxCore.getBPackageManager().getInstalledApplications(flags, BlackBoxCore.getUserId());
-            return ParceledListSliceCompat.create(installedApplications);
+            // Masque PhantomApp et toute signature BlackBox de la liste visible par les apps slottées
+            List<ApplicationInfo> filtered = new ArrayList<>();
+            for (ApplicationInfo ai : installedApplications) {
+                if (!isHiddenPackage(ai.packageName)) filtered.add(ai);
+            }
+            return ParceledListSliceCompat.create(filtered);
         }
     }
 
@@ -281,8 +286,22 @@ public class IPackageManagerProxy extends BinderInvocationStub {
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
             int flags = MethodParameterUtils.toInt(args[0]);
             List<PackageInfo> installedPackages = BlackBoxCore.getBPackageManager().getInstalledPackages(flags, BlackBoxCore.getUserId());
-            return ParceledListSliceCompat.create(installedPackages);
+            // Masque PhantomApp et toute signature BlackBox de la liste visible par les apps slottées
+            List<PackageInfo> filtered = new ArrayList<>();
+            for (PackageInfo pi : installedPackages) {
+                if (!isHiddenPackage(pi.packageName)) filtered.add(pi);
+            }
+            return ParceledListSliceCompat.create(filtered);
         }
+    }
+
+    private static boolean isHiddenPackage(String pkg) {
+        if (pkg == null) return false;
+        String hostPkg = BlackBoxCore.getHostPkg();
+        if (pkg.equals(hostPkg)) return true;
+        // Filtre toute app dont le package révèle BlackBox ou PhantomApp
+        return pkg.contains("blackbox") || pkg.contains("niunaijun")
+                || pkg.contains("phantom") || pkg.contains("blackboxa");
     }
 
     @ProxyMethod("getApplicationInfo")
