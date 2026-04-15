@@ -35,21 +35,41 @@
                 android:layout_marginEnd="10dp"
                 android:background="@drawable/bg_slot_dot"/>
 
-            <!-- Slot name + fingerprint ID -->
+            <!-- Slot name (long press to rename) + fingerprint ID -->
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:orientation="vertical">
 
-                <TextView
-                    android:id="@+id/tvSlotName"
+                <!-- Nom editable -->
+                <LinearLayout
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Slot 1"
-                    android:textSize="13sp"
-                    android:textColor="#C4A8FF"
-                    android:textStyle="bold"/>
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        android:id="@+id/tvSlotName"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Slot 1"
+                        android:textSize="13sp"
+                        android:textColor="#C4A8FF"
+                        android:textStyle="bold"
+                        android:background="?attr/selectableItemBackground"
+                        android:paddingEnd="6dp"/>
+
+                    <!-- Crayon edit hint -->
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="✎"
+                        android:textSize="10sp"
+                        android:textColor="#3D3060"
+                        android:paddingTop="1dp"/>
+
+                </LinearLayout>
 
                 <TextView
                     android:id="@+id/tvFpId"
@@ -91,6 +111,38 @@
                 android:paddingEnd="14dp"
                 android:paddingBottom="8dp">
 
+                <!-- MODEL chip -->
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:background="@drawable/bg_fp_chip"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp"
+                    android:paddingTop="4dp"
+                    android:paddingBottom="4dp"
+                    android:layout_marginEnd="6dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="MODEL"
+                        android:textSize="9sp"
+                        android:textColor="#4A3870"
+                        android:textAllCaps="true"
+                        android:letterSpacing="0.05"/>
+
+                    <TextView
+                        android:id="@+id/tvModel"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="SM-G991B"
+                        android:textSize="10sp"
+                        android:textColor="#7A5AB0"
+                        android:fontFamily="monospace"/>
+
+                </LinearLayout>
+
                 <!-- IMEI chip -->
                 <LinearLayout
                     android:layout_width="wrap_content"
@@ -117,38 +169,6 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="35834923···"
-                        android:textSize="10sp"
-                        android:textColor="#7A5AB0"
-                        android:fontFamily="monospace"/>
-
-                </LinearLayout>
-
-                <!-- MAC chip -->
-                <LinearLayout
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:background="@drawable/bg_fp_chip"
-                    android:paddingStart="8dp"
-                    android:paddingEnd="8dp"
-                    android:paddingTop="4dp"
-                    android:paddingBottom="4dp"
-                    android:layout_marginEnd="6dp">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="MAC"
-                        android:textSize="9sp"
-                        android:textColor="#4A3870"
-                        android:textAllCaps="true"
-                        android:letterSpacing="0.05"/>
-
-                    <TextView
-                        android:id="@+id/tvMac"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="02:A3:F2···"
                         android:textSize="10sp"
                         android:textColor="#7A5AB0"
                         android:fontFamily="monospace"/>
