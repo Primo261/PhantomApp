@@ -2,12 +2,11 @@ package top.niunaijun.blackboxa.view.main
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.net.Uri
 import android.net.VpnService
 import android.os.Bundle
 import android.util.Log
-import android.view.Menu
-import android.view.MenuItem
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -43,7 +42,7 @@ class MainActivity : LoadingActivity() {
         try {
             super.onCreate(savedInstanceState)
             try { BlackBoxCore.get().onBeforeMainActivityOnCreate(this) }
-            catch (e: Exception) { Log.e(TAG, "onBeforeMainActivityOnCreate: ${e.message}") }
+            catch (e: Exception) { Log.e(TAG, "onBefore: ${e.message}") }
 
             setContentView(viewBinding.root)
             setupPhantomHeader()
@@ -53,10 +52,34 @@ class MainActivity : LoadingActivity() {
             checkVpnPermission()
 
             try { BlackBoxCore.get().onAfterMainActivityOnCreate(this) }
-            catch (e: Exception) { Log.e(TAG, "onAfterMainActivityOnCreate: ${e.message}") }
+            catch (e: Exception) { Log.e(TAG, "onAfter: ${e.message}") }
         } catch (e: Exception) {
-            Log.e(TAG, "Critical error in onCreate: ${e.message}")
+            Log.e(TAG, "Critical onCreate: ${e.message}")
             showErrorDialog("Failed to initialize: ${e.message}")
+        }
+    }
+
+    // ─── Header ───────────────────────────────────────────────────────────────
+
+    private fun setupPhantomHeader() {
+        viewBinding.toolbarLayout.ivSettings.setOnClickListener { view ->
+            val popup = androidx.appcompat.widget.PopupMenu(this, view)
+            popup.inflate(R.menu.menu_main)
+            popup.setOnMenuItemClickListener { item ->
+                when (item.itemId) {
+                    R.id.main_setting -> SettingActivity.start(this)
+                    R.id.main_git -> startActivity(
+                        Intent(Intent.ACTION_VIEW,
+                            Uri.parse("https://github.com/Primo261/PhantomApp"))
+                    )
+                    R.id.fake_location -> startActivity(
+                        Intent(this, FakeManagerActivity::class.java)
+                            .also { it.putExtra("userID", 0) }
+                    )
+                }
+                true
+            }
+            popup.show()
         }
     }
 
@@ -64,11 +87,11 @@ class MainActivity : LoadingActivity() {
 
     private fun initSlotRecyclerView() {
         slotCardAdapter = SlotCardAdapter(
-            context = this,
-            onLaunchApp = { packageName, userId -> launchApp(packageName, userId) },
+            context     = this,
+            onLaunchApp = { pkg, userId -> launchApp(pkg, userId) },
             onAddApp    = { userId -> openAppPicker(userId) },
             onResetSlot = { userId, _ -> slotCardAdapter.refreshSlot(userId) },
-            onAppDelete = { app, userId -> deleteApp(app.packageName, userId) }
+            onAppDelete = { app: ApplicationInfo, userId -> deleteApp(app.packageName, userId) }
         )
         viewBinding.slotsRecyclerView.apply {
             layoutManager = LinearLayoutManager(this@MainActivity)
@@ -78,35 +101,16 @@ class MainActivity : LoadingActivity() {
         refreshSlots()
     }
 
-    private fun deleteApp(packageName: String, userId: Int) {
-        lifecycleScope.launch(Dispatchers.IO) {
-            try {
-                withContext(Dispatchers.Main) { showLoading() }
-                BlackBoxCore.get().uninstallPackageAsUser(packageName, userId)
-                withContext(Dispatchers.Main) {
-                    hideLoading()
-                    slotCardAdapter.refreshSlot(userId)
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "deleteApp error: ${e.message}")
-                withContext(Dispatchers.Main) {
-                    hideLoading()
-                }
-            }
-        }
-    }
-
     private fun refreshSlots() {
         lifecycleScope.launch(Dispatchers.IO) {
             val users = try {
                 BlackBoxCore.get().users ?: emptyList()
             } catch (e: Exception) {
-                Log.e(TAG, "Error getting users: ${e.message}")
+                Log.e(TAG, "getUsers: ${e.message}")
                 emptyList()
             }
             withContext(Dispatchers.Main) {
-                val slotData = users.map { SlotCardAdapter.SlotData(it.id) }
-                slotCardAdapter.setSlots(slotData)
+                slotCardAdapter.setSlots(users.map { SlotCardAdapter.SlotData(it.id) })
             }
         }
     }
@@ -122,19 +126,17 @@ class MainActivity : LoadingActivity() {
                 BlackBoxCore.get().createUser(users.size)
                 withContext(Dispatchers.Main) { refreshSlots() }
             } catch (e: Exception) {
-                Log.e(TAG, "Error adding slot: ${e.message}")
-                withContext(Dispatchers.Main) {
-                    android.widget.Toast.makeText(
-                        this@MainActivity, "Erreur création slot", android.widget.Toast.LENGTH_SHORT
-                    ).show()
-                }
+                Log.e(TAG, "addSlot: ${e.message}")
             }
         }
     }
 
     // ─── App picker ───────────────────────────────────────────────────────────
 
+    private var currentPickerUserId = 0
+
     private fun openAppPicker(userId: Int) {
+        currentPickerUserId = userId
         val intent = Intent(this, ListActivity::class.java)
         intent.putExtra("userID", userId)
         apkPathResult.launch(intent)
@@ -145,17 +147,17 @@ class MainActivity : LoadingActivity() {
             try {
                 if (result.resultCode == RESULT_OK) {
                     result.data?.let { data ->
-                        val userId = data.getIntExtra("userID", 0)
+                        val userId = data.getIntExtra("userID", currentPickerUserId)
                         val source = data.getStringExtra("source")
                         if (source != null) installApp(source, userId)
                     }
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "apkPathResult error: ${e.message}")
+                Log.e(TAG, "apkPathResult: ${e.message}")
             }
         }
 
-    // ─── Install & Launch ─────────────────────────────────────────────────────
+    // ─── Install / Launch / Delete ────────────────────────────────────────────
 
     private fun installApp(source: String, userId: Int) {
         lifecycleScope.launch(Dispatchers.IO) {
@@ -171,26 +173,10 @@ class MainActivity : LoadingActivity() {
                     slotCardAdapter.refreshSlot(userId)
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "installApp error: ${e.message}")
-                withContext(Dispatchers.Main) {
-                    hideLoading()
-                    android.widget.Toast.makeText(
-                        this@MainActivity,
-                        "Installation échouée: ${e.message}",
-                        android.widget.Toast.LENGTH_SHORT
-                    ).show()
-                }
+                Log.e(TAG, "installApp: ${e.message}")
+                withContext(Dispatchers.Main) { hideLoading() }
             }
         }
-    }
-
-    // Conservés pour compatibilité avec AppsFragment
-    fun showFloatButton(show: Boolean) {
-        // No-op — plus de FAB lié au scroll dans la nouvelle UI
-    }
-
-    fun scanUser() {
-        refreshSlots()
     }
 
     private fun launchApp(packageName: String, userId: Int) {
@@ -200,41 +186,52 @@ class MainActivity : LoadingActivity() {
                 val success = BlackBoxCore.get().launchApk(packageName, userId)
                 withContext(Dispatchers.Main) {
                     hideLoading()
-                    if (!success) {
-                        android.widget.Toast.makeText(
-                            this@MainActivity,
-                            getString(R.string.start_fail),
-                            android.widget.Toast.LENGTH_SHORT
-                        ).show()
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "launchApp error: ${e.message}")
-                withContext(Dispatchers.Main) {
-                    hideLoading()
-                    android.widget.Toast.makeText(
-                        this@MainActivity,
-                        getString(R.string.start_fail),
+                    if (!success) android.widget.Toast.makeText(
+                        this@MainActivity, getString(R.string.start_fail),
                         android.widget.Toast.LENGTH_SHORT
                     ).show()
                 }
+            } catch (e: Exception) {
+                Log.e(TAG, "launchApp: ${e.message}")
+                withContext(Dispatchers.Main) { hideLoading() }
             }
         }
     }
+
+    private fun deleteApp(packageName: String, userId: Int) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                withContext(Dispatchers.Main) { showLoading() }
+                BlackBoxCore.get().uninstallPackageAsUser(packageName, userId)
+                withContext(Dispatchers.Main) {
+                    hideLoading()
+                    slotCardAdapter.refreshSlot(userId)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "deleteApp: ${e.message}")
+                withContext(Dispatchers.Main) { hideLoading() }
+            }
+        }
+    }
+
+    // Compat AppsFragment
+    fun showFloatButton(show: Boolean) {}
+    fun scanUser() { refreshSlots() }
 
     // ─── Permissions ──────────────────────────────────────────────────────────
 
     private fun checkStoragePermission() {
         try {
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-                if (!android.os.Environment.isExternalStorageManager()) showStoragePermissionDialog()
+                if (!android.os.Environment.isExternalStorageManager())
+                    showStoragePermissionDialog()
             } else {
                 if (androidx.core.content.ContextCompat.checkSelfPermission(
                         this, android.Manifest.permission.WRITE_EXTERNAL_STORAGE
                     ) != android.content.pm.PackageManager.PERMISSION_GRANTED
                 ) requestLegacyStoragePermission()
             }
-        } catch (e: Exception) { Log.e(TAG, "checkStoragePermission: ${e.message}") }
+        } catch (e: Exception) { Log.e(TAG, "checkStorage: ${e.message}") }
     }
 
     private fun requestLegacyStoragePermission() {
@@ -252,12 +249,12 @@ class MainActivity : LoadingActivity() {
         try {
             MaterialDialog(this).show {
                 title(text = "Permission requise")
-                message(text = "PhantomApp a besoin d'accès au stockage pour fonctionner correctement.")
+                message(text = "PhantomApp a besoin d'accès au stockage.")
                 positiveButton(text = "Autoriser") { openAllFilesAccessSettings() }
                 negativeButton(text = "Plus tard")
                 cancelable(false)
             }
-        } catch (e: Exception) { Log.e(TAG, "showStorageDialog: ${e.message}") }
+        } catch (e: Exception) { Log.e(TAG, "storageDialog: ${e.message}") }
     }
 
     private fun openAllFilesAccessSettings() {
@@ -268,7 +265,7 @@ class MainActivity : LoadingActivity() {
                         .also { it.data = Uri.parse("package:$packageName") }
                 )
             }
-        } catch (e: Exception) { Log.e(TAG, "openAllFilesSettings: ${e.message}") }
+        } catch (e: Exception) { Log.e(TAG, "openStorage: ${e.message}") }
     }
 
     private val storagePermissionResult =
@@ -278,7 +275,7 @@ class MainActivity : LoadingActivity() {
         try {
             val vpnIntent = VpnService.prepare(this)
             if (vpnIntent != null) vpnPermissionResult.launch(vpnIntent)
-        } catch (e: Exception) { Log.e(TAG, "checkVpnPermission: ${e.message}") }
+        } catch (e: Exception) { Log.e(TAG, "checkVpn: ${e.message}") }
     }
 
     private val vpnPermissionResult =
@@ -292,38 +289,5 @@ class MainActivity : LoadingActivity() {
                 positiveButton(text = "OK") { finish() }
             }
         } catch (e: Exception) { finish() }
-    }
-
-    // ─── Menu ─────────────────────────────────────────────────────────────────
-
-    private fun setupPhantomHeader() {
-        // Le logo est affiché directement dans le XML (ImageView)
-        // L'icône settings ouvre le menu contextuel
-        viewBinding.toolbarLayout.ivSettings.setOnClickListener { view ->
-            val popup = androidx.appcompat.widget.PopupMenu(this, view)
-            popup.inflate(R.menu.menu_main)
-            popup.setOnMenuItemClickListener { item -> onOptionsItemSelected(item) }
-            popup.show()
-        }
-    }
-
-    override fun onCreateOptionsMenu(menu: Menu?): Boolean {
-        return try { menuInflater.inflate(R.menu.menu_main, menu); true }
-        catch (e: Exception) { false }
-    }
-
-    override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        return try {
-            when (item.itemId) {
-                R.id.main_setting -> SettingActivity.start(this)
-                R.id.main_git -> startActivity(
-                    Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Primo261/PhantomApp"))
-                )
-                R.id.fake_location -> startActivity(
-                    Intent(this, FakeManagerActivity::class.java).also { it.putExtra("userID", 0) }
-                )
-            }
-            true
-        } catch (e: Exception) { false }
     }
 }
