@@ -10,6 +10,7 @@
 #include <Hook/VMClassLoaderHook.h>
 #include <Hook/UnixFileSystemHook.h>
 #include <Hook/FileSystemHook.h>
+#include <Hook/SystemPropertiesHook.h>
 #include <Hook/BinderHook.h>
 #include <Hook/DexFileHook.h>
 #include <Hook/RuntimeHook.h>
@@ -74,6 +75,7 @@ void nativeHook(JNIEnv *env) {
     BaseHook::init(env);
     UnixFileSystemHook::init(env);
     FileSystemHook::init();
+    SystemPropertiesHook::init();
     VMClassLoaderHook::init(env);
 
     BinderHook::init(env);
@@ -131,6 +133,20 @@ bool disableResourceLoading(JNIEnv *env, jclass clazz) {
     return true;
 }
 
+// Push une (key, value) vers la table SystemPropertiesHook native. Appelée
+// par NativeCore.setSpoofedProperty depuis AppInstrumentation.injectBuildFields
+// au tout début du cycle de vie du slot.
+void setSpoofedProperty(JNIEnv *env, jclass clazz, jstring key, jstring value) {
+    if (key == nullptr || value == nullptr) return;
+    const char *cKey = env->GetStringUTFChars(key, nullptr);
+    const char *cVal = env->GetStringUTFChars(value, nullptr);
+    if (cKey != nullptr && cVal != nullptr) {
+        SystemPropertiesHook::setSpoofedProperty(cKey, cVal);
+    }
+    if (cKey != nullptr) env->ReleaseStringUTFChars(key, cKey);
+    if (cVal != nullptr) env->ReleaseStringUTFChars(value, cVal);
+}
+
 static JNINativeMethod gMethods[] = {
         {"disableHiddenApi", "()Z",                               (void *) disableHiddenApi},
         {"disableResourceLoading", "()Z",                         (void *) disableResourceLoading},
@@ -138,6 +154,7 @@ static JNINativeMethod gMethods[] = {
         {"addIORule",  "(Ljava/lang/String;Ljava/lang/String;)V", (void *) addIORule},
         {"enableIO",   "()V",                                     (void *) enableIO},
         {"init",       "(I)V",                                    (void *) init},
+        {"setSpoofedProperty", "(Ljava/lang/String;Ljava/lang/String;)V", (void *) setSpoofedProperty},
 };
 
 int registerNativeMethods(JNIEnv *env, const char *className,

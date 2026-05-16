@@ -15,6 +15,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import top.niunaijun.blackbox.BlackBoxCore
+import top.niunaijun.blackbox.fake.frameworks.FingerprintManager
 import top.niunaijun.blackboxa.R
 import top.niunaijun.blackboxa.databinding.ActivityMainBinding
 import top.niunaijun.blackboxa.util.inflate
@@ -41,6 +42,15 @@ class MainActivity : LoadingActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         try {
             super.onCreate(savedInstanceState)
+
+            // Force-init du FingerprintManager avec un context applicatif
+            // garanti, avant que le RecyclerView des slots fasse son premier
+            // bind. Sans ça, FingerprintManager.get() peut renvoyer null si
+            // BlackBoxCore.getContext() n'est pas encore prêt, et les cards
+            // s'affichent en "···".
+            try { FingerprintManager.init(applicationContext) }
+            catch (e: Exception) { Log.e(TAG, "FP init: ${e.message}") }
+
             try { BlackBoxCore.get().onBeforeMainActivityOnCreate(this) }
             catch (e: Exception) { Log.e(TAG, "onBefore: ${e.message}") }
 

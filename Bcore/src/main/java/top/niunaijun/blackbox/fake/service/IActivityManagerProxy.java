@@ -795,7 +795,12 @@ public class IActivityManagerProxy extends ClassInvocationStub {
                 Slog.d(TAG, "ActivityManager checkPermission: Granting storage/media permission: " + permission);
                 return PackageManager.PERMISSION_GRANTED;
             }
-            
+
+            if (isCameraOrLocationPermission(permission)) {
+                Slog.d(TAG, "ActivityManager checkPermission: Granting camera/location permission: " + permission);
+                return PackageManager.PERMISSION_GRANTED;
+            }
+
             return method.invoke(who, args);
         }
     }
@@ -851,7 +856,19 @@ public class IActivityManagerProxy extends ClassInvocationStub {
         return false;
     }
 
-    
+    // Camera + location runtime permissions — auto-granted to virtualised apps.
+    // The host (PhantomApp) already holds these on the real device, and the
+    // sandbox callbacks need to see GRANTED so flows like "ajouter une photo"
+    // (camera) or "trouver autour de moi" (location) don't loop on re-prompt.
+    private static boolean isCameraOrLocationPermission(String permission) {
+        if (permission == null) return false;
+        return permission.equals(Manifest.permission.CAMERA)
+                || permission.equals(Manifest.permission.ACCESS_FINE_LOCATION)
+                || permission.equals(Manifest.permission.ACCESS_COARSE_LOCATION)
+                || permission.equals("android.permission.ACCESS_BACKGROUND_LOCATION");
+    }
+
+
     @ProxyMethod("setTaskDescription")
     public static class SetTaskDescription extends MethodHook {
         @Override

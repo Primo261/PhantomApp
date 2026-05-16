@@ -16,10 +16,14 @@ import top.niunaijun.blackbox.utils.Slog;
 public class FileSystemProxy extends ClassInvocationStub {
     public static final String TAG = "FileSystemProxy";
 
-    // Mots-clés à filtrer de /proc/self/maps — révèlent l'environnement BlackBox
+    // Mots-clés à filtrer de /proc/self/maps — révèlent l'environnement BlackBox.
+    // Maintenu symétrique avec kBlacklist dans Bcore/src/main/cpp/Hook/ProcMapsFilter.cpp ;
+    // une JNI upcall par ligne serait beaucoup trop coûteuse, donc la
+    // duplication est assumée.
     private static final String[] MAPS_BLACKLIST = {
+        "libblackbox.so", "dobby", "xdl",
         "blackbox", "BlackBox", "niunaijun", "phantom", "Phantom",
-        "top.niunaijun", "com.phantom"
+        "top.niunaijun", "com.phantom", "/data/data/com.phantom.app"
     };
 
     public FileSystemProxy() {

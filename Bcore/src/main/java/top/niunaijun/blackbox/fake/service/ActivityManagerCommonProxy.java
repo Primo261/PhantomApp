@@ -36,8 +36,18 @@ public class ActivityManagerCommonProxy {
             Intent intent = getIntent(args);
             Slog.d(TAG, "Hook in : " + intent);
             assert intent != null;
-            
-            
+
+            // Reroute REQUEST_PERMISSIONS to host package so the system PermissionController
+            // can resolve it. Host (PhantomApp) already has these permissions granted on the
+            // real device, so the system returns GRANTED immediately without prompting the user.
+            // The resultTo binder token remains the virtualized app's, so the callback
+            // onRequestPermissionsResult is delivered correctly to the sandboxed app.
+            if ("android.content.pm.action.REQUEST_PERMISSIONS".equals(intent.getAction())) {
+                Slog.d(TAG, "Rerouting REQUEST_PERMISSIONS to host package " + BlackBoxCore.getHostPkg());
+                intent.putExtra("android.content.pm.extra.PACKAGE_NAME", BlackBoxCore.getHostPkg());
+                return method.invoke(who, args);
+            }
+
             if (intent.getParcelableExtra("_B_|_target_") != null) {
                 return method.invoke(who, args);
             }

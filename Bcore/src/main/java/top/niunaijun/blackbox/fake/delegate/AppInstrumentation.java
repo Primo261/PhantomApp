@@ -18,6 +18,7 @@ import black.android.app.BRActivity;
 import black.android.app.BRActivityThread;
 import top.niunaijun.blackbox.BlackBoxCore;
 import top.niunaijun.blackbox.app.BActivityThread;
+import top.niunaijun.blackbox.core.NativeCore;
 import top.niunaijun.blackbox.fake.frameworks.FingerprintManager;
 import top.niunaijun.blackbox.fake.hook.HookManager;
 import top.niunaijun.blackbox.fake.hook.IInjectHook;
@@ -154,8 +155,11 @@ public final class AppInstrumentation extends BaseInstrumentationDelegate implem
     /**
      * Écrit un champ static final de Build via Unsafe.putObject().
      * Bypass total ART — fonctionne Android 12-16.
+     *
+     * Accepte n'importe quel Object (String, String[], ...) — putObject est typé
+     * générique côté Unsafe.
      */
-    private static boolean setBuildFieldUnsafe(String fieldName, String value) {
+    private static boolean setBuildFieldUnsafe(String fieldName, Object value) {
         try {
             Object unsafe = getUnsafe();
             if (unsafe == null) return false;
@@ -180,7 +184,7 @@ public final class AppInstrumentation extends BaseInstrumentationDelegate implem
     /**
      * Fallback réflexion classique (Android 8-11).
      */
-    private static boolean setBuildFieldReflection(String fieldName, String value) {
+    private static boolean setBuildFieldReflection(String fieldName, Object value) {
         try {
             Field field = Build.class.getDeclaredField(fieldName);
             field.setAccessible(true);
@@ -198,9 +202,9 @@ public final class AppInstrumentation extends BaseInstrumentationDelegate implem
     }
 
     /**
-     * Unsafe en priorité, réflexion en fallback.
+     * Unsafe en priorité, réflexion en fallback. Accepte String ou String[].
      */
-    private static void setBuildField(String fieldName, String value) {
+    private static void setBuildField(String fieldName, Object value) {
         if (!setBuildFieldUnsafe(fieldName, value)) {
             setBuildFieldReflection(fieldName, value);
         }
@@ -235,8 +239,49 @@ public final class AppInstrumentation extends BaseInstrumentationDelegate implem
         }
     }
 
+    // Variantes de partition lues par certains SDK avant la propriété principale
+    // (Android 12+ split system/vendor/odm/system_ext). Garde la symétrie avec
+    // SystemPropertiesProxy.getSpoofedValue côté Java.
+    private static final String[] PROP_VARIANTS = {
+            "", ".odm", ".system", ".vendor", ".system_ext"
+    };
+
     /**
-     * Injecte tous les champs Build.* du profil du slot.
+     * Push une propriété + toutes ses variantes vendor/odm/system/system_ext
+     * vers la table native (consommée par SystemPropertiesHook côté C).
+     * baseKey doit être de la forme "ro.product.model" ; la variante est
+     * insérée entre "ro.product" et ".model".
+     */
+    private static void pushPropAndVariants(String baseKey, String value) {
+        if (value == null) return;
+        try {
+            NativeCore.setSpoofedProperty(baseKey, value);
+            int dot = baseKey.indexOf('.', 3); // après "ro."
+            int secondDot = (dot >= 0) ? baseKey.indexOf('.', dot + 1) : -1;
+            if (secondDot < 0) return;
+            String prefix = baseKey.substring(0, secondDot);   // "ro.product"
+            String tail   = baseKey.substring(secondDot);      // ".model"
+            for (String variant : PROP_VARIANTS) {
+                if (variant.isEmpty()) continue;
+                NativeCore.setSpoofedProperty(prefix + variant + tail, value);
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "pushPropAndVariants(" + baseKey + ") failed: " + t.getMessage());
+        }
+    }
+
+    private static void pushPropSimple(String key, String value) {
+        if (value == null) return;
+        try {
+            NativeCore.setSpoofedProperty(key, value);
+        } catch (Throwable t) {
+            Log.w(TAG, "pushPropSimple(" + key + ") failed: " + t.getMessage());
+        }
+    }
+
+    /**
+     * Injecte tous les champs Build.* du profil du slot et les push vers le
+     * hook natif __system_property_get.
      */
     private void injectBuildFields() {
         try {
@@ -250,37 +295,109 @@ public final class AppInstrumentation extends BaseInstrumentationDelegate implem
             String fakeModel        = fp.getModel(userId);
             String fakeDevice       = fp.getDevice(userId);
             String fakeProduct      = fp.getProduct(userId);
+            String fakeBoard        = fp.getBoard(userId);
+            String fakeHardware     = fp.getHardware(userId);
+            String fakeBootloader   = fp.getBootloader(userId);
             String fakeSerial       = fp.getSerial(userId);
             String fakeFp           = fp.getBuildFingerprint(userId);
+            String fakeDisplay      = fp.getDisplay(userId);
+            String fakeHost         = fp.getHost(userId);
+            String fakeUser         = fp.getUser(userId);
+            String fakeTags         = fp.getTags(userId);
+            String fakeType         = fp.getType(userId);
+            String fakeRadio        = fp.getRadio(userId);
+            String fakeIncremental  = fp.getIncremental(userId);
+            String fakeSecPatch     = fp.getSecurityPatch(userId);
+            String[] fakeAbis       = fp.getSupportedAbis(userId);
 
             // Extrait Build.ID et VERSION.RELEASE du fingerprint
-            // Format: brand/product/device:version/buildId/release-keys
-            String fakeBuildId      = "PHANTOM_" + userId;
-            String fakeRelease      = "14";
+            // Format: brand/product/device:version/buildId/incremental:user/tags
+            String fakeBuildId  = "PHANTOM_" + userId;
+            String fakeRelease  = "14";
             try {
                 String[] parts = fakeFp.split("/");
                 if (parts.length >= 4) fakeBuildId = parts[3];
-                if (fakeFp.contains(":13/")) fakeRelease = "13";
+                if (fakeFp.contains(":12/")) fakeRelease = "12";
+                else if (fakeFp.contains(":13/")) fakeRelease = "13";
                 else if (fakeFp.contains(":14/")) fakeRelease = "14";
-                else if (fakeFp.contains(":12/")) fakeRelease = "12";
+                else if (fakeFp.contains(":15/")) fakeRelease = "15";
+                else if (fakeFp.contains(":16/")) fakeRelease = "16";
             } catch (Exception ignored) {}
 
-            // Injection
-            setBuildField("BRAND",        fakeBrand);
-            setBuildField("MANUFACTURER", fakeManufacturer);
-            setBuildField("MODEL",        fakeModel);
-            setBuildField("DEVICE",       fakeDevice);
-            setBuildField("PRODUCT",      fakeProduct);
-            setBuildField("HARDWARE",     fakeDevice);
-            setBuildField("SERIAL",       fakeSerial);
-            setBuildField("FINGERPRINT",  fakeFp);
-            setBuildField("ID",           fakeBuildId);
-            setVersionField("RELEASE",    fakeRelease);
+            // ─── Injection Java Build.* ────────────────────────────────────
+            setBuildField("BRAND",         fakeBrand);
+            setBuildField("MANUFACTURER",  fakeManufacturer);
+            setBuildField("MODEL",         fakeModel);
+            setBuildField("DEVICE",        fakeDevice);
+            setBuildField("PRODUCT",       fakeProduct);
+            setBuildField("BOARD",         fakeBoard);
+            setBuildField("HARDWARE",      fakeHardware);
+            setBuildField("BOOTLOADER",    fakeBootloader);
+            setBuildField("SERIAL",        fakeSerial);
+            setBuildField("FINGERPRINT",   fakeFp);
+            setBuildField("ID",            fakeBuildId);
+            setBuildField("DISPLAY",       fakeDisplay);
+            setBuildField("HOST",          fakeHost);
+            setBuildField("USER",          fakeUser);
+            setBuildField("TAGS",          fakeTags);
+            setBuildField("TYPE",          fakeType);
+            setBuildField("RADIO",         fakeRadio);
+            setBuildField("SUPPORTED_ABIS",        fakeAbis);
+            setBuildField("SUPPORTED_32_BIT_ABIS", new String[]{"armeabi-v7a", "armeabi"});
+            setBuildField("SUPPORTED_64_BIT_ABIS", new String[]{"arm64-v8a"});
+            setBuildField("CPU_ABI",       "arm64-v8a");
+            setBuildField("CPU_ABI2",      "");
+            setVersionField("RELEASE",         fakeRelease);
+            setVersionField("INCREMENTAL",     fakeIncremental);
+            setVersionField("SECURITY_PATCH",  fakeSecPatch);
+
+            // ─── Push vers la table native pour __system_property_get ─────
+            // Couvre les variantes vendor/odm/system_ext pour les props critiques.
+            pushPropAndVariants("ro.product.brand",        fakeBrand);
+            pushPropAndVariants("ro.product.manufacturer", fakeManufacturer);
+            pushPropAndVariants("ro.product.model",        fakeModel);
+            pushPropAndVariants("ro.product.device",       fakeDevice);
+            pushPropAndVariants("ro.product.name",         fakeProduct);
+            pushPropAndVariants("ro.product.board",        fakeBoard);
+            pushPropSimple("ro.product.cpu.abi",      "arm64-v8a");
+            pushPropSimple("ro.product.cpu.abi2",     "");
+            pushPropSimple("ro.product.cpu.abilist",   "arm64-v8a,armeabi-v7a,armeabi");
+            pushPropSimple("ro.product.cpu.abilist32", "armeabi-v7a,armeabi");
+            pushPropSimple("ro.product.cpu.abilist64", "arm64-v8a");
+            pushPropSimple("ro.hardware",          fakeHardware);
+            pushPropSimple("ro.board.platform",    fakeBoard);
+            pushPropSimple("ro.bootloader",        fakeBootloader);
+            pushPropSimple("ro.boot.bootloader",   fakeBootloader);
+            pushPropSimple("ro.serialno",          fakeSerial);
+            pushPropSimple("ro.serial",            fakeSerial);
+            pushPropSimple("ro.boot.serialno",     fakeSerial);
+            pushPropSimple("ro.build.fingerprint",         fakeFp);
+            pushPropSimple("ro.vendor.build.fingerprint",  fakeFp);
+            pushPropSimple("ro.system.build.fingerprint",  fakeFp);
+            pushPropSimple("ro.odm.build.fingerprint",     fakeFp);
+            pushPropSimple("ro.system_ext.build.fingerprint", fakeFp);
+            pushPropSimple("ro.build.id",          fakeBuildId);
+            pushPropSimple("ro.vendor.build.id",   fakeBuildId);
+            pushPropSimple("ro.system.build.id",   fakeBuildId);
+            pushPropSimple("ro.build.display.id",  fakeDisplay);
+            pushPropSimple("ro.build.host",        fakeHost);
+            pushPropSimple("ro.build.user",        fakeUser);
+            pushPropSimple("ro.build.tags",        fakeTags);
+            pushPropSimple("ro.build.type",        fakeType);
+            pushPropSimple("ro.build.version.release",          fakeRelease);
+            pushPropSimple("ro.system.build.version.release",   fakeRelease);
+            pushPropSimple("ro.vendor.build.version.release",   fakeRelease);
+            pushPropSimple("ro.build.version.incremental",      fakeIncremental);
+            pushPropSimple("ro.build.version.security_patch",   fakeSecPatch);
+            pushPropSimple("ro.vendor.build.security_patch",    fakeSecPatch);
 
             // Vérification
             if (fakeModel.equals(Build.MODEL)) {
                 Log.d(TAG, "✅ Build injected — slot=" + userId
-                        + " MODEL=" + fakeModel + " BRAND=" + fakeBrand);
+                        + " MODEL=" + fakeModel + " BRAND=" + fakeBrand
+                        + " BOARD=" + fakeBoard + " HW=" + fakeHardware
+                        + " ABIS=" + java.util.Arrays.toString(Build.SUPPORTED_ABIS)
+                        + " PATCH=" + Build.VERSION.SECURITY_PATCH);
             } else {
                 Log.w(TAG, "⚠️ Build.MODEL still=" + Build.MODEL + " (expected " + fakeModel + ")");
             }

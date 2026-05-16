@@ -35,8 +35,16 @@ public class NativeCore {
     public static native void hideXposed();
 
     public static native boolean disableHiddenApi();
-    
+
     public static native boolean disableResourceLoading();
+
+    /**
+     * Push une propriété système spoofée vers la table native consommée par
+     * SystemPropertiesHook. À appeler une fois par slot à l'init de l'app,
+     * après FingerprintManager mais avant que les SDKs natifs lisent
+     * __system_property_get. Idempotent (overwrite si déjà présent).
+     */
+    public static native void setSpoofedProperty(String key, String value);
 
 
     @Keep

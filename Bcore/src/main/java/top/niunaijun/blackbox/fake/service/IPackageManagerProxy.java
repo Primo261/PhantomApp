@@ -431,6 +431,9 @@ public class IPackageManagerProxy extends BinderInvocationStub {
             if (isStorageOrMediaPermission(permission)) {
                 return PackageManager.PERMISSION_GRANTED;
             }
+            if (isCameraOrLocationPermission(permission)) {
+                return PackageManager.PERMISSION_GRANTED;
+            }
             if (isNotificationOrXiaomiPermission(permission)) {
                 return PackageManager.PERMISSION_GRANTED;
             }
@@ -450,6 +453,9 @@ public class IPackageManagerProxy extends BinderInvocationStub {
             if (isStorageOrMediaPermission(permission)) {
                 return PackageManager.PERMISSION_GRANTED;
             }
+            if (isCameraOrLocationPermission(permission)) {
+                return PackageManager.PERMISSION_GRANTED;
+            }
             if (isNotificationOrXiaomiPermission(permission)) {
                 return PackageManager.PERMISSION_GRANTED;
             }
@@ -464,6 +470,7 @@ public class IPackageManagerProxy extends BinderInvocationStub {
             String permission = (String) args[0];
             if (isAudioPermission(permission)) return false;
             if (isStorageOrMediaPermission(permission)) return false;
+            if (isCameraOrLocationPermission(permission)) return false;
             if (isNotificationOrXiaomiPermission(permission)) return false;
             return method.invoke(who, args);
         }
@@ -483,6 +490,17 @@ public class IPackageManagerProxy extends BinderInvocationStub {
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
             return null;
         }
+    }
+
+    // Camera + location runtime permissions — auto-granted to virtualised apps.
+    // Same rationale as the storage/media path: host already holds them on the
+    // real device, sandbox callers loop on re-prompt without GRANTED.
+    private static boolean isCameraOrLocationPermission(String permission) {
+        if (permission == null) return false;
+        return permission.equals(android.Manifest.permission.CAMERA)
+                || permission.equals(android.Manifest.permission.ACCESS_FINE_LOCATION)
+                || permission.equals(android.Manifest.permission.ACCESS_COARSE_LOCATION)
+                || permission.equals("android.permission.ACCESS_BACKGROUND_LOCATION");
     }
 
     private static boolean isStorageOrMediaPermission(String permission) {
