@@ -31,11 +31,16 @@ import top.niunaijun.blackbox.core.env.BEnvironment;
 import top.niunaijun.blackbox.entity.pm.InstallOption;
 import top.niunaijun.blackbox.utils.ArrayUtils;
 import top.niunaijun.blackbox.utils.FileUtils;
+import top.niunaijun.blackbox.utils.RuntimePermissionWhitelist;
+import top.niunaijun.blackbox.utils.Slog;
 import top.niunaijun.blackbox.utils.compat.BuildCompat;
 
 
 @SuppressLint({"SdCardPath", "NewApi"})
 public class PackageManagerCompat {
+
+    private static final String TAG_PERM = "PHANTOM_PERM";
+    private static final boolean DEBUG_PERM = false;
 
     public static PackageInfo generatePackageInfo(BPackageSettings ps, int flags, BPackageUserState state, int userId) {
         if (ps == null) {
@@ -181,6 +186,18 @@ public class PackageManagerCompat {
                 for (int i = 0; i < N; i++) {
                     final String perm = p.requestedPermissions.get(i);
                     pi.requestedPermissions[i] = perm;
+                    // Waxmoon-style force-grant for runtime perms. Apps that read
+                    // PackageInfo.requestedPermissionsFlags directly (androidx
+                    // PermissionChecker, obfuscated in-house checks) never hit
+                    // our binder hooks — fixing it here covers every caller of
+                    // the virtual PackageManager. See RuntimePermissionWhitelist.
+                    if (RuntimePermissionWhitelist.isAutoGranted(perm)) {
+                        pi.requestedPermissionsFlags[i] |= PackageInfo.REQUESTED_PERMISSION_GRANTED;
+                        if (DEBUG_PERM) {
+                            Slog.d(TAG_PERM, "BPMS auto-grant flag: " + perm
+                                    + " pkg=" + p.packageName + " user=" + userId);
+                        }
+                    }
                     
 
 

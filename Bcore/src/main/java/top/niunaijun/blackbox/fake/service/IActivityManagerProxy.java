@@ -50,6 +50,7 @@ import top.niunaijun.blackbox.proxy.record.ProxyBroadcastRecord;
 import top.niunaijun.blackbox.proxy.record.ProxyPendingRecord;
 import top.niunaijun.blackbox.utils.MethodParameterUtils;
 import top.niunaijun.blackbox.utils.Reflector;
+import top.niunaijun.blackbox.utils.RuntimePermissionWhitelist;
 import top.niunaijun.blackbox.utils.compat.ActivityManagerCompat;
 import top.niunaijun.blackbox.utils.compat.BuildCompat;
 import top.niunaijun.blackbox.utils.compat.ParceledListSliceCompat;
@@ -778,50 +779,53 @@ public class IActivityManagerProxy extends ClassInvocationStub {
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
             MethodParameterUtils.replaceLastUid(args);
+            if (args == null || args.length < 1 || !(args[0] instanceof String)) {
+                return method.invoke(who, args);
+            }
             String permission = (String) args[0];
-            if (permission.equals(Manifest.permission.ACCOUNT_MANAGER)
-                    || permission.equals(Manifest.permission.SEND_SMS)) {
+            if (DEBUG_PERM) Slog.d(TAG_PERM, "IAM.checkPermission perm=" + permission);
+            if (Manifest.permission.ACCOUNT_MANAGER.equals(permission)
+                    || Manifest.permission.SEND_SMS.equals(permission)) {
                 return PackageManager.PERMISSION_GRANTED;
             }
-            
-            
-            if (isAudioPermission(permission)) {
-                Slog.d(TAG, "ActivityManager checkPermission: Granting audio permission: " + permission);
+            if (RuntimePermissionWhitelist.isAutoGranted(permission)) {
                 return PackageManager.PERMISSION_GRANTED;
             }
-
-            
-            if (isStorageOrMediaPermission(permission)) {
-                Slog.d(TAG, "ActivityManager checkPermission: Granting storage/media permission: " + permission);
-                return PackageManager.PERMISSION_GRANTED;
-            }
-
-            if (isCameraOrLocationPermission(permission)) {
-                Slog.d(TAG, "ActivityManager checkPermission: Granting camera/location permission: " + permission);
-                return PackageManager.PERMISSION_GRANTED;
-            }
-
             return method.invoke(who, args);
         }
     }
 
-    
-    private static boolean isAudioPermission(String permission) {
-        if (permission == null) return false;
-        return permission.equals(Manifest.permission.RECORD_AUDIO)
-                || permission.equals(Manifest.permission.CAPTURE_AUDIO_OUTPUT)
-                || permission.equals(Manifest.permission.MODIFY_AUDIO_SETTINGS)
-                || permission.equals("android.permission.FOREGROUND_SERVICE_MICROPHONE")
-                || permission.equals("android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION")
-                || permission.equals("android.permission.FOREGROUND_SERVICE_CAMERA")
-                || permission.equals("android.permission.FOREGROUND_SERVICE_LOCATION")
-                || permission.equals("android.permission.FOREGROUND_SERVICE_HEALTH")
-                || permission.equals("android.permission.FOREGROUND_SERVICE_DATA_SYNC")
-                || permission.equals("android.permission.FOREGROUND_SERVICE_SPECIAL_USE")
-                || permission.equals("android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED")
-                || permission.equals("android.permission.FOREGROUND_SERVICE_PHONE_CALL")
-                || permission.equals("android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE");
+    // Android 14+ (API 34+) introduced IActivityManager.checkPermissionForDevice
+    // for the Virtual Device framework. PermissionManager.checkPermissionUncached()
+    // routes Context.checkSelfPermission() through THIS binder method, not
+    // checkPermission, so without this hook our auto-grant whitelist never
+    // applies to checkSelfPermission. This was the root cause of the Vinted
+    // "ajouter photo" loop on Android 16 — every call to
+    //   Activity.checkSelfPermission(READ_MEDIA_IMAGES)
+    // hit the system unmediated and returned DENIED, triggering requestPermissions.
+    @ProxyMethod("checkPermissionForDevice")
+    public static class CheckPermissionForDevice extends MethodHook {
+        @Override
+        protected Object hook(Object who, Method method, Object[] args) throws Throwable {
+            MethodParameterUtils.replaceLastUid(args);
+            if (args == null || args.length < 1 || !(args[0] instanceof String)) {
+                return method.invoke(who, args);
+            }
+            String permission = (String) args[0];
+            if (DEBUG_PERM) Slog.d(TAG_PERM, "IAM.checkPermissionForDevice perm=" + permission);
+            if (Manifest.permission.ACCOUNT_MANAGER.equals(permission)
+                    || Manifest.permission.SEND_SMS.equals(permission)) {
+                return PackageManager.PERMISSION_GRANTED;
+            }
+            if (RuntimePermissionWhitelist.isAutoGranted(permission)) {
+                return PackageManager.PERMISSION_GRANTED;
+            }
+            return method.invoke(who, args);
+        }
     }
+
+    private static final String TAG_PERM = "PHANTOM_PERM";
+    private static final boolean DEBUG_PERM = false;
 
     @ProxyMethod("checkUriPermission")
     public static class checkUriPermission extends MethodHook {
@@ -829,43 +833,6 @@ public class IActivityManagerProxy extends ClassInvocationStub {
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
             return PERMISSION_GRANTED;
         }
-    }
-
-    
-    private static boolean isStorageOrMediaPermission(String permission) {
-        if (permission == null) return false;
-        if (permission.equals(Manifest.permission.READ_EXTERNAL_STORAGE)
-                || permission.equals(Manifest.permission.WRITE_EXTERNAL_STORAGE)) {
-            return true;
-        }
-        if (permission.equals(Manifest.permission.READ_MEDIA_AUDIO)
-                || permission.equals(Manifest.permission.READ_MEDIA_VIDEO)
-                || permission.equals(Manifest.permission.READ_MEDIA_IMAGES)
-                || permission.equals("android.permission.READ_MEDIA_VISUAL")
-                || permission.equals("android.permission.READ_MEDIA_AURAL")
-                || permission.equals(Manifest.permission.ACCESS_MEDIA_LOCATION)) {
-            return true;
-        }
-        if (permission.equals("android.permission.READ_MEDIA_AUDIO_USER_SELECTED")
-                || permission.equals("android.permission.READ_MEDIA_VIDEO_USER_SELECTED")
-                || permission.equals("android.permission.READ_MEDIA_IMAGES_USER_SELECTED")
-                || permission.equals("android.permission.READ_MEDIA_VISUAL_USER_SELECTED")
-                || permission.equals("android.permission.READ_MEDIA_AURAL_USER_SELECTED")) {
-                return true;
-        }
-        return false;
-    }
-
-    // Camera + location runtime permissions — auto-granted to virtualised apps.
-    // The host (PhantomApp) already holds these on the real device, and the
-    // sandbox callbacks need to see GRANTED so flows like "ajouter une photo"
-    // (camera) or "trouver autour de moi" (location) don't loop on re-prompt.
-    private static boolean isCameraOrLocationPermission(String permission) {
-        if (permission == null) return false;
-        return permission.equals(Manifest.permission.CAMERA)
-                || permission.equals(Manifest.permission.ACCESS_FINE_LOCATION)
-                || permission.equals(Manifest.permission.ACCESS_COARSE_LOCATION)
-                || permission.equals("android.permission.ACCESS_BACKGROUND_LOCATION");
     }
 
 

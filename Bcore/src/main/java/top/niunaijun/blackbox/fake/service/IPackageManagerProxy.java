@@ -34,6 +34,7 @@ import top.niunaijun.blackbox.fake.service.base.PkgMethodProxy;
 import top.niunaijun.blackbox.fake.service.base.ValueMethodProxy;
 import top.niunaijun.blackbox.utils.MethodParameterUtils;
 import top.niunaijun.blackbox.utils.Reflector;
+import top.niunaijun.blackbox.utils.RuntimePermissionWhitelist;
 import top.niunaijun.blackbox.utils.Slog;
 import top.niunaijun.blackbox.utils.compat.BuildCompat;
 import top.niunaijun.blackbox.utils.compat.ParceledListSliceCompat;
@@ -41,6 +42,8 @@ import top.niunaijun.blackbox.utils.compat.ParceledListSliceCompat;
 
 public class IPackageManagerProxy extends BinderInvocationStub {
     public static final String TAG = "PackageManagerStub";
+    private static final String TAG_PERM = "PHANTOM_PERM";
+    private static final boolean DEBUG_PERM = false;
 
     public IPackageManagerProxy() {
         super(BRActivityThread.get().sPackageManager().asBinder());
@@ -140,16 +143,22 @@ public class IPackageManagerProxy extends BinderInvocationStub {
 
             PackageInfo packageInfo = BlackBoxCore.getBPackageManager().getPackageInfo(packageName, flags, BlackBoxCore.getUserId());
             if (packageInfo != null) {
-                // Hook permissions audio
+                // Force-grant every runtime perm in the whitelist on the
+                // PackageInfo flags array. Apps (and androidx PermissionChecker)
+                // read this array directly without ever hitting our checkPermission
+                // hooks. Vinted "ajouter photo" loop on Android 16 was caused by
+                // this exact gap — only audio perms were granted here previously.
                 if (packageInfo.requestedPermissions != null && packageInfo.requestedPermissionsFlags != null) {
+                    int granted = 0;
                     for (int i = 0; i < packageInfo.requestedPermissions.length; i++) {
                         String perm = packageInfo.requestedPermissions[i];
-                        if (perm != null && (perm.equals(android.Manifest.permission.RECORD_AUDIO)
-                                || perm.equals("android.permission.FOREGROUND_SERVICE_MICROPHONE")
-                                || perm.equals(android.Manifest.permission.MODIFY_AUDIO_SETTINGS)
-                                || perm.equals(android.Manifest.permission.CAPTURE_AUDIO_OUTPUT))) {
+                        if (perm != null && RuntimePermissionWhitelist.isAutoGranted(perm)) {
                             packageInfo.requestedPermissionsFlags[i] |= PackageInfo.REQUESTED_PERMISSION_GRANTED;
+                            granted++;
                         }
+                    }
+                    if (DEBUG_PERM && granted > 0) {
+                        Slog.d(TAG_PERM, "IPM.getPackageInfo pkg=" + packageName + " flags=" + flags + " auto-granted=" + granted);
                     }
                 }
 
@@ -423,18 +432,12 @@ public class IPackageManagerProxy extends BinderInvocationStub {
     public static class SimpleAudioPermissionHook extends MethodHook {
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
+            if (args == null || args.length < 1 || !(args[0] instanceof String)) {
+                return method.invoke(who, args);
+            }
             String permission = (String) args[0];
-            String packageName = (String) args[1];
-            if (isAudioPermission(permission)) {
-                return PackageManager.PERMISSION_GRANTED;
-            }
-            if (isStorageOrMediaPermission(permission)) {
-                return PackageManager.PERMISSION_GRANTED;
-            }
-            if (isCameraOrLocationPermission(permission)) {
-                return PackageManager.PERMISSION_GRANTED;
-            }
-            if (isNotificationOrXiaomiPermission(permission)) {
+            if (DEBUG_PERM) Slog.d(TAG_PERM, "IPM.checkPermission perm=" + permission);
+            if (RuntimePermissionWhitelist.isAutoGranted(permission)) {
                 return PackageManager.PERMISSION_GRANTED;
             }
             return method.invoke(who, args);
@@ -445,18 +448,12 @@ public class IPackageManagerProxy extends BinderInvocationStub {
     public static class CheckSelfPermission extends MethodHook {
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
+            if (args == null || args.length < 1 || !(args[0] instanceof String)) {
+                return method.invoke(who, args);
+            }
             String permission = (String) args[0];
-            String packageName = (String) args[1];
-            if (isAudioPermission(permission)) {
-                return PackageManager.PERMISSION_GRANTED;
-            }
-            if (isStorageOrMediaPermission(permission)) {
-                return PackageManager.PERMISSION_GRANTED;
-            }
-            if (isCameraOrLocationPermission(permission)) {
-                return PackageManager.PERMISSION_GRANTED;
-            }
-            if (isNotificationOrXiaomiPermission(permission)) {
+            if (DEBUG_PERM) Slog.d(TAG_PERM, "IPM.checkSelfPermission perm=" + permission);
+            if (RuntimePermissionWhitelist.isAutoGranted(permission)) {
                 return PackageManager.PERMISSION_GRANTED;
             }
             return method.invoke(who, args);
@@ -467,11 +464,13 @@ public class IPackageManagerProxy extends BinderInvocationStub {
     public static class ShouldShowRequestPermissionRationale extends MethodHook {
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
+            if (args == null || args.length < 1 || !(args[0] instanceof String)) {
+                return method.invoke(who, args);
+            }
             String permission = (String) args[0];
-            if (isAudioPermission(permission)) return false;
-            if (isStorageOrMediaPermission(permission)) return false;
-            if (isCameraOrLocationPermission(permission)) return false;
-            if (isNotificationOrXiaomiPermission(permission)) return false;
+            if (RuntimePermissionWhitelist.isAutoGranted(permission)) {
+                return false;
+            }
             return method.invoke(who, args);
         }
     }
@@ -490,66 +489,6 @@ public class IPackageManagerProxy extends BinderInvocationStub {
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
             return null;
         }
-    }
-
-    // Camera + location runtime permissions — auto-granted to virtualised apps.
-    // Same rationale as the storage/media path: host already holds them on the
-    // real device, sandbox callers loop on re-prompt without GRANTED.
-    private static boolean isCameraOrLocationPermission(String permission) {
-        if (permission == null) return false;
-        return permission.equals(android.Manifest.permission.CAMERA)
-                || permission.equals(android.Manifest.permission.ACCESS_FINE_LOCATION)
-                || permission.equals(android.Manifest.permission.ACCESS_COARSE_LOCATION)
-                || permission.equals("android.permission.ACCESS_BACKGROUND_LOCATION");
-    }
-
-    private static boolean isStorageOrMediaPermission(String permission) {
-        if (permission == null) return false;
-        if (permission.equals(android.Manifest.permission.READ_EXTERNAL_STORAGE)
-                || permission.equals(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)) return true;
-        if (permission.equals(android.Manifest.permission.READ_MEDIA_AUDIO)
-                || permission.equals(android.Manifest.permission.READ_MEDIA_VIDEO)
-                || permission.equals(android.Manifest.permission.READ_MEDIA_IMAGES)
-                || permission.equals("android.permission.READ_MEDIA_VISUAL")
-                || permission.equals("android.permission.READ_MEDIA_AURAL")
-                || permission.equals(android.Manifest.permission.ACCESS_MEDIA_LOCATION)) return true;
-        if (permission.equals("android.permission.READ_MEDIA_AUDIO_USER_SELECTED")
-                || permission.equals("android.permission.READ_MEDIA_VIDEO_USER_SELECTED")
-                || permission.equals("android.permission.READ_MEDIA_IMAGES_USER_SELECTED")
-                || permission.equals("android.permission.READ_MEDIA_VISUAL_USER_SELECTED")
-                || permission.equals("android.permission.READ_MEDIA_AURAL_USER_SELECTED")) return true;
-        return false;
-    }
-
-    private static boolean isAudioPermission(String permission) {
-        if (permission == null) return false;
-        return permission.equals(android.Manifest.permission.RECORD_AUDIO)
-                || permission.equals(android.Manifest.permission.CAPTURE_AUDIO_OUTPUT)
-                || permission.equals(android.Manifest.permission.MODIFY_AUDIO_SETTINGS)
-                || permission.equals("android.permission.FOREGROUND_SERVICE_MICROPHONE")
-                || permission.equals("android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION")
-                || permission.equals("android.permission.FOREGROUND_SERVICE_CAMERA")
-                || permission.equals("android.permission.FOREGROUND_SERVICE_LOCATION")
-                || permission.equals("android.permission.FOREGROUND_SERVICE_HEALTH")
-                || permission.equals("android.permission.FOREGROUND_SERVICE_DATA_SYNC")
-                || permission.equals("android.permission.FOREGROUND_SERVICE_SPECIAL_USE")
-                || permission.equals("android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED")
-                || permission.equals("android.permission.FOREGROUND_SERVICE_PHONE_CALL")
-                || permission.equals("android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE");
-    }
-
-    private static boolean isNotificationOrXiaomiPermission(String permission) {
-        if (permission == null) return false;
-        if (permission.equals("android.permission.POST_NOTIFICATIONS")) return true;
-        if (permission.equals("miui.permission.USE_INTERNAL_GENERAL_API") ||
-                permission.equals("miui.permission.OPTIMIZE_POWER") ||
-                permission.equals("miui.permission.RUN_IN_BACKGROUND") ||
-                permission.equals("miui.permission.POST_NOTIFICATIONS") ||
-                permission.equals("miui.permission.AUTO_START") ||
-                permission.equals("miui.permission.BACKGROUND_POPUP_WINDOW") ||
-                permission.equals("miui.permission.SHOW_WHEN_LOCKED") ||
-                permission.equals("miui.permission.TURN_SCREEN_ON")) return true;
-        return false;
     }
 
     @ProxyMethod("setSplashScreenTheme")
