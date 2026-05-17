@@ -72,8 +72,17 @@ void install_property_get_hook() {
 }
 
 
-__attribute__((constructor)) void init_virtual_spoof()
-{
-    install_property_get_hook();
-    LOGD("VirtualSpoof: __system_property_get hook loaded");
-}
+// DISABLED 2026-05-17: ce constructor concurrence SystemPropertiesHook.
+// Il installait un hook __system_property_get avec table hardcodée
+// Pixel 6/Qualcomm AVANT JNI_OnLoad. Son hook restait en place comme
+// fallback de notre orig_system_property_get, faisant fuiter
+// "qcom"/"adreno"/"oriole" pour toute property non listée dans
+// AppInstrumentation.injectBuildFields() — fingerprint incohérent.
+// Le fichier reste compilé mais inerte. install_property_get_hook()
+// n'est plus appelé nulle part. À supprimer dans une session cleanup.
+//
+// __attribute__((constructor)) void init_virtual_spoof()
+// {
+//     install_property_get_hook();
+//     LOGD("VirtualSpoof: __system_property_get hook loaded");
+// }

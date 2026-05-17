@@ -391,6 +391,22 @@ public final class AppInstrumentation extends BaseInstrumentationDelegate implem
             pushPropSimple("ro.build.version.security_patch",   fakeSecPatch);
             pushPropSimple("ro.vendor.build.security_patch",    fakeSecPatch);
 
+            // ─── Anti-fraud props supplémentaires ──────────────────────
+            // Properties lues par les SDK anti-fraude (Metadome, Castle,
+            // Sift) pour détecter émulateurs, debug build, bootloader
+            // unlocked, et incohérences hardware/GPU. Valeurs cohérentes
+            // avec un device samsung/mediatek release stock.
+            pushPropSimple("ro.kernel.qemu",             "0");
+            pushPropSimple("ro.boot.qemu",               "0");
+            pushPropSimple("ro.boot.hardware",            fakeHardware);
+            pushPropSimple("ro.hardware.egl",            "mali");
+            pushPropSimple("ro.debuggable",              "0");
+            pushPropSimple("ro.secure",                  "1");
+            pushPropSimple("ro.build.flavor",             fakeProduct + "-" + fakeType);
+            pushPropSimple("ro.boot.flash.locked",       "1");
+            pushPropSimple("ro.boot.verifiedbootstate", "green");
+            pushPropSimple("ro.boot.veritymode",         "enforcing");
+
             // Vérification
             if (fakeModel.equals(Build.MODEL)) {
                 Log.d(TAG, "✅ Build injected — slot=" + userId
