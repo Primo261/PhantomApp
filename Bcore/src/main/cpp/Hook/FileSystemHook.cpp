@@ -10,6 +10,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 
 // Number of hooks successfully installed. Logged at the end of init() so we
@@ -43,6 +44,45 @@ static bool isResourceCacheBlocked(const char *path) {
 static bool shouldSynthesise(const char *path, int flags) {
     if ((flags & (O_WRONLY | O_RDWR)) != 0) return false;
     return ProcMapsFilter::isSensitivePath(path);
+}
+
+// V2 — Couvre le pattern openat(dirfd, "maps") où dirfd a été obtenu via
+// open("/proc/self") ou open("/proc/<pid>"). Ce pattern bypasse le check
+// absolu de V1 (qui exigeait dirfd == AT_FDCWD).
+//
+// On résout dirfd via readlink("/proc/self/fd/<dirfd>") qui retourne le
+// chemin référencé. readlink n'est pas hooké chez nous → pas de récursion.
+// Le coût (~1 syscall readlink) n'est payé QUE si pathname == "maps" ou
+// "smaps", filtre fast-path sur 99.99% des openat normaux.
+static bool shouldSynthesiseOpenat(int dirfd, const char *path, int flags) {
+    if (path == nullptr) return false;
+    if ((flags & (O_WRONLY | O_RDWR)) != 0) return false;
+
+    // Cas 1 — path absolu ou explicitement AT_FDCWD : check classique V1.
+    if (dirfd == AT_FDCWD) {
+        return ProcMapsFilter::isSensitivePath(path);
+    }
+
+    // Cas 2 — path relatif via dirfd : on accepte uniquement les entrées
+    // "maps"/"smaps", tout le reste passe en trampoline direct.
+    if (strcmp(path, "maps") != 0 && strcmp(path, "smaps") != 0) {
+        return false;
+    }
+
+    char proc_fd[64];
+    snprintf(proc_fd, sizeof(proc_fd), "/proc/self/fd/%d", dirfd);
+    char target[256];
+    ssize_t len = readlink(proc_fd, target, sizeof(target) - 1);
+    if (len < 0) return false;
+    target[len] = '\0';
+
+    // /proc/self peut être résolu en /proc/<pid> selon la libc ; on
+    // accepte les 2 formes pour être robuste.
+    if (strcmp(target, "/proc/self") == 0) return true;
+    pid_t pid = getpid();
+    char own[64];
+    snprintf(own, sizeof(own), "/proc/%d", pid);
+    return strcmp(target, own) == 0;
 }
 
 static bool fopenIsReadOnly(const char *mode) {
@@ -98,12 +138,19 @@ static int new_openat(int dirfd, const char *pathname, int flags, ...) {
         errno = ENOENT;
         return -1;
     }
-    // V1 ne traite que les paths absolus (dirfd == AT_FDCWD). Un lecteur
-    // sophistiqué qui fait open("/proc/self") + openat(dirfd, "maps") passe à
-    // travers — à traiter en V2 si observé en pratique.
-    if (dirfd == AT_FDCWD && shouldSynthesise(pathname, flags)) {
-        ALOGD("FileSystemHook: Synthesising filtered maps (at) for: %s", pathname);
-        int fd = ProcMapsFilter::openFiltered(pathname);
+    // V2 : couvre dirfd absolu (V1) ET dirfd visant /proc/self ou /proc/<pid>.
+    if (shouldSynthesiseOpenat(dirfd, pathname, flags)) {
+        // Pour dirfd != AT_FDCWD on reconstruit le path absolu équivalent
+        // que ProcMapsFilter::openFiltered sait ouvrir directement.
+        const char *pathForFilter = pathname;
+        char absolute[64];
+        if (dirfd != AT_FDCWD) {
+            snprintf(absolute, sizeof(absolute), "/proc/self/%s", pathname);
+            pathForFilter = absolute;
+        }
+        ALOGD("FileSystemHook: Synthesising filtered maps (at) for: %s (dirfd=%d)",
+              pathForFilter, dirfd);
+        int fd = ProcMapsFilter::openFiltered(pathForFilter);
         if (fd >= 0) return fd;
     }
     va_list args;
@@ -119,9 +166,17 @@ static int new_openat64(int dirfd, const char *pathname, int flags, ...) {
         errno = ENOENT;
         return -1;
     }
-    if (dirfd == AT_FDCWD && shouldSynthesise(pathname, flags)) {
-        ALOGD("FileSystemHook: Synthesising filtered maps (at64) for: %s", pathname);
-        int fd = ProcMapsFilter::openFiltered(pathname);
+    // V2 : symétrique à new_openat — couvre dirfd absolu ET dirfd /proc/self|<pid>.
+    if (shouldSynthesiseOpenat(dirfd, pathname, flags)) {
+        const char *pathForFilter = pathname;
+        char absolute[64];
+        if (dirfd != AT_FDCWD) {
+            snprintf(absolute, sizeof(absolute), "/proc/self/%s", pathname);
+            pathForFilter = absolute;
+        }
+        ALOGD("FileSystemHook: Synthesising filtered maps (at64) for: %s (dirfd=%d)",
+              pathForFilter, dirfd);
+        int fd = ProcMapsFilter::openFiltered(pathForFilter);
         if (fd >= 0) return fd;
     }
     va_list args;
