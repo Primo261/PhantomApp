@@ -11,6 +11,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.afollestad.materialdialogs.MaterialDialog
+import com.phantom.app.license.LicenseGuard
+import com.phantom.app.ui.ActivationActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -42,6 +44,12 @@ class MainActivity : LoadingActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         try {
             super.onCreate(savedInstanceState)
+
+            if (!LicenseGuard.isValid(this)) {
+                startActivity(Intent(this, ActivationActivity::class.java))
+                finish()
+                return
+            }
 
             // Force-init du FingerprintManager avec un context applicatif
             // garanti, avant que le RecyclerView des slots fasse son premier
