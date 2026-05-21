@@ -41,6 +41,12 @@ Added comprehensive device info header in logcat for easier debugging:
 
 ---
 
+#### Stabilité des slots face aux SDK qui demandent des permissions absentes
+
+- Les apps qui demandent des permissions non accordées (téléphonie, micro, localisation, capteurs, etc.) ne crashent plus la slot
+
+---
+
 #### VPN Permission Fix
 **Problem:** VPN service failed to establish interface (`builder.establish()` returned null).
 
