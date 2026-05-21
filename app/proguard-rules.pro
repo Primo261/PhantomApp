@@ -26,6 +26,10 @@
 -keep class android.** {*; }
 -keep class com.android.** {*; }
 
+# HiddenApiBypass (LSPosed) — reflection target for Build.* spoofing in slots
+-keep class org.lsposed.hiddenapibypass.** { *; }
+-dontwarn org.lsposed.hiddenapibypass.**
+
 -keep class top.niunaijun.blackreflection.** {*; }
 -keep @top.niunaijun.blackreflection.annotation.BClass class * {*;}
 -keep @top.niunaijun.blackreflection.annotation.BClassName class * {*;}

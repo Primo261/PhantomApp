@@ -35,6 +35,12 @@ Added comprehensive device info header in logcat for easier debugging:
 
 ### Bug Fixes
 
+#### Slot Isolation on Android 14+
+
+- Amélioration de l'isolation des slots sur Android 14+
+
+---
+
 #### VPN Permission Fix
 **Problem:** VPN service failed to establish interface (`builder.establish()` returned null).
 

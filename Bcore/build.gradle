@@ -88,6 +88,8 @@ dependencies {
 
     implementation 'com.github.tiann:FreeReflection:3.2.2'
 
+    implementation "org.lsposed.hiddenapibypass:hiddenapibypass:${rootProject.ext.hiddenApiBypass}"
+
 
 
     

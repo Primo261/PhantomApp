@@ -14,6 +14,8 @@ import android.util.Log;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
+import org.lsposed.hiddenapibypass.HiddenApiBypass;
+
 import black.android.app.BRActivity;
 import black.android.app.BRActivityThread;
 import top.niunaijun.blackbox.BlackBoxCore;
@@ -37,6 +39,56 @@ public final class AppInstrumentation extends BaseInstrumentationDelegate implem
     // Cache Unsafe
     private static Object sUnsafe = null;
     private static boolean sUnsafeInitDone = false;
+
+    // HiddenApiBypass — applique l'exemption "L" une seule fois par process.
+    // Cette exemption débloque Unsafe.staticFieldOffset / staticFieldBase /
+    // putObject qui sont blocklistés sur API 33+ (et inaccessibles via
+    // setHiddenApiExemptions natif sur API 36).
+    private static boolean sHiddenApiBypassTried = false;
+    private static boolean sHiddenApiBypassOk = false;
+
+    private static synchronized boolean ensureHiddenApiBypass() {
+        if (sHiddenApiBypassTried) return sHiddenApiBypassOk;
+        sHiddenApiBypassTried = true;
+        try {
+            sHiddenApiBypassOk = HiddenApiBypass.addHiddenApiExemptions("L");
+            if (sHiddenApiBypassOk) {
+                Log.i(TAG, "HiddenApiBypass.addHiddenApiExemptions(L) ✅");
+            } else {
+                Log.w(TAG, "HiddenApiBypass.addHiddenApiExemptions(L) returned false");
+            }
+        } catch (Throwable t) {
+            sHiddenApiBypassOk = false;
+            Log.w(TAG, "HiddenApiBypass.addHiddenApiExemptions failed: " + t);
+        }
+        return sHiddenApiBypassOk;
+    }
+
+    private static String formatFieldValue(Object value) {
+        if (value instanceof Object[]) return java.util.Arrays.toString((Object[]) value);
+        return String.valueOf(value);
+    }
+
+    // Probe une seule fois si sun.misc.Unsafe.staticFieldOffset est accessible.
+    // Sur API 33+, la méthode est blocklistée/absente — la cascade Unsafe est
+    // alors du code mort (le spoofing Build.* passe par le hook natif
+    // __system_property_get + l'injection initiale dans le slot process).
+    private static Boolean sUnsafeOffsetAvailable = null;
+
+    private static synchronized boolean isUnsafeOffsetAvailable() {
+        if (sUnsafeOffsetAvailable != null) return sUnsafeOffsetAvailable;
+        try {
+            Class.forName("sun.misc.Unsafe")
+                 .getMethod("staticFieldOffset", Field.class);
+            sUnsafeOffsetAvailable = true;
+            Log.d(TAG, "Unsafe.staticFieldOffset available — cascade enabled");
+        } catch (Throwable t) {
+            sUnsafeOffsetAvailable = false;
+            Log.d(TAG, "Unsafe.staticFieldOffset unavailable (API 33+) — " +
+                       "skipping Unsafe cascade, native SystemPropertiesHook handles spoofing");
+        }
+        return sUnsafeOffsetAvailable;
+    }
 
     public static AppInstrumentation get() {
         if (sAppInstrumentation == null) {
@@ -153,11 +205,68 @@ public final class AppInstrumentation extends BaseInstrumentationDelegate implem
     // ─── Injection Build.* ────────────────────────────────────────────────────
 
     /**
-     * Écrit un champ static final de Build via Unsafe.putObject().
-     * Bypass total ART — fonctionne Android 12-16.
+     * Path principal API 33+/36 — n'utilise PAS Unsafe.staticFieldOffset
+     * (absente sur API 36) : récupère l'offset du static field via
+     * Field.getOffset() (hidden API, débloquée par HiddenApiBypass.
+     * addHiddenApiExemptions("L")), puis écrit dans le payload du Class
+     * object via Unsafe.putObjectVolatile (présente API 36).
      *
-     * Accepte n'importe quel Object (String, String[], ...) — putObject est typé
-     * générique côté Unsafe.
+     * En ART, les static fields sont stockés dans le payload de l'objet
+     * java.lang.Class, donc putObjectVolatile(ownerClass, fieldOffset, value)
+     * est équivalent à l'ancien Unsafe.putObject(staticFieldBase, staticFieldOffset, value).
+     *
+     * putObjectVolatile (vs putObject) garantit une memory barrier : tous les
+     * threads du slot (UI, IO, WebView, ads SDKs) verront la même valeur
+     * spoofée — pas d'incohérence intra-process qui flag chez les anti-fraud.
+     */
+    private static boolean setFieldViaHiddenApiBypass(Class<?> ownerClass,
+                                                      String fieldName,
+                                                      Object value) {
+        if (!ensureHiddenApiBypass()) return false;
+        try {
+            // 1. Get Field — getStaticFields bypasse la blocklist hidden API
+            //    sur les champs internes de Build, getDeclaredField suffit
+            //    quand l'exemption "L" a déjà été appliquée.
+            Field target = null;
+            try {
+                for (Field f : HiddenApiBypass.getStaticFields(ownerClass)) {
+                    if (f.getName().equals(fieldName)) { target = f; break; }
+                }
+            } catch (Throwable ignored) { /* fallback ci-dessous */ }
+            if (target == null) {
+                target = ownerClass.getDeclaredField(fieldName);
+            }
+
+            // 2. Offset du field via Field.getOffset() (hidden API)
+            Method getOffset = Field.class.getDeclaredMethod("getOffset");
+            getOffset.setAccessible(true);
+            int offset = (int) getOffset.invoke(target);
+
+            // 3. Get Unsafe.theUnsafe (toujours dispo API 36)
+            Class<?> unsafeClass = Class.forName("sun.misc.Unsafe");
+            Field theUnsafe = unsafeClass.getDeclaredField("theUnsafe");
+            theUnsafe.setAccessible(true);
+            Object unsafe = theUnsafe.get(null);
+            if (unsafe == null) return false;
+
+            // 4. putObjectVolatile(Class, offset, value) — write avec memory
+            //    barrier pour cohérence multi-thread du slot.
+            Method putObjectVolatile = unsafeClass.getMethod(
+                    "putObjectVolatile", Object.class, long.class, Object.class);
+            putObjectVolatile.invoke(unsafe, ownerClass, (long) offset, value);
+
+            Log.i(TAG, "Build field injected via HiddenApiBypass: "
+                    + fieldName + " = " + formatFieldValue(value));
+            return true;
+        } catch (Throwable t) {
+            Log.v(TAG, "setFieldViaHiddenApiBypass(" + fieldName + ") failed: " + t);
+            return false;
+        }
+    }
+
+    /**
+     * Fallback 1 — Unsafe sans HiddenApiBypass (Android 8-12).
+     * Demoted to Log.v on failure since this is part of the cascade.
      */
     private static boolean setBuildFieldUnsafe(String fieldName, Object value) {
         try {
@@ -176,13 +285,13 @@ public final class AppInstrumentation extends BaseInstrumentationDelegate implem
             putObject.invoke(unsafe, base, offset, value);
             return true;
         } catch (Exception e) {
-            Log.w(TAG, "setBuildFieldUnsafe(" + fieldName + ") failed: " + e.getMessage());
+            Log.v(TAG, "setBuildFieldUnsafe(" + fieldName + ") failed: " + e.getMessage());
             return false;
         }
     }
 
     /**
-     * Fallback réflexion classique (Android 8-11).
+     * Fallback 2 — réflexion classique (Android 8-11).
      */
     private static boolean setBuildFieldReflection(String fieldName, Object value) {
         try {
@@ -196,24 +305,41 @@ public final class AppInstrumentation extends BaseInstrumentationDelegate implem
             field.set(null, value);
             return true;
         } catch (Exception e) {
-            Log.w(TAG, "setBuildFieldReflection(" + fieldName + ") failed: " + e.getMessage());
+            Log.v(TAG, "setBuildFieldReflection(" + fieldName + ") failed: " + e.getMessage());
             return false;
         }
     }
 
     /**
-     * Unsafe en priorité, réflexion en fallback. Accepte String ou String[].
+     * Cascade : HiddenApiBypass (Field.getOffset + putObjectVolatile) →
+     * Unsafe legacy (staticFieldOffset, Android <14) → réflexion classique.
+     * Accepte String ou String[]. Émet un Log.w UNIQUEMENT si tous les paths
+     * ont échoué.
+     *
+     * Le path principal ne dépend pas de Unsafe.staticFieldOffset donc
+     * fonctionne sur API 33+. Les fallbacks legacy nécessitent l'ancienne API
+     * Unsafe et sont gated sur isUnsafeOffsetAvailable().
      */
     private static void setBuildField(String fieldName, Object value) {
-        if (!setBuildFieldUnsafe(fieldName, value)) {
-            setBuildFieldReflection(fieldName, value);
+        if (setFieldViaHiddenApiBypass(Build.class, fieldName, value)) return;
+        if (isUnsafeOffsetAvailable()) {
+            if (setBuildFieldUnsafe(fieldName, value)) return;
+            if (setBuildFieldReflection(fieldName, value)) return;
         }
+        Log.w(TAG, "setBuildField(" + fieldName + "): all strategies failed");
     }
 
     /**
-     * Même méthode pour Build.VERSION (classe interne).
+     * Même cascade pour Build.VERSION (classe interne). Le path principal
+     * (Field.getOffset + putObjectVolatile) fonctionne API 33+ ; le fallback
+     * Unsafe legacy est gated sur isUnsafeOffsetAvailable().
      */
     private static void setVersionField(String fieldName, String value) {
+        if (setFieldViaHiddenApiBypass(Build.VERSION.class, fieldName, value)) return;
+        if (!isUnsafeOffsetAvailable()) {
+            Log.w(TAG, "setVersionField(" + fieldName + "): no path available");
+            return;
+        }
         try {
             Object unsafe = getUnsafe();
             Field field = Build.VERSION.class.getDeclaredField(fieldName);
@@ -225,17 +351,17 @@ public final class AppInstrumentation extends BaseInstrumentationDelegate implem
                 long offset = (long) staticFieldOffset.invoke(unsafe, field);
                 Object base = staticFieldBase.invoke(unsafe, field);
                 putObject.invoke(unsafe, base, offset, value);
-            } else {
-                field.setAccessible(true);
-                try {
-                    Field mod = Field.class.getDeclaredField("accessFlags");
-                    mod.setAccessible(true);
-                    mod.setInt(field, mod.getInt(field) & ~0x10);
-                } catch (Exception ignored) {}
-                field.set(null, value);
+                return;
             }
+            field.setAccessible(true);
+            try {
+                Field mod = Field.class.getDeclaredField("accessFlags");
+                mod.setAccessible(true);
+                mod.setInt(field, mod.getInt(field) & ~0x10);
+            } catch (Exception ignored) {}
+            field.set(null, value);
         } catch (Exception e) {
-            Log.w(TAG, "setVersionField(" + fieldName + ") failed: " + e.getMessage());
+            Log.w(TAG, "setVersionField(" + fieldName + "): all strategies failed: " + e.getMessage());
         }
     }
 
