@@ -1,21 +1,23 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    
+
     <style name="Theme.BlackBox" parent="Theme.MaterialComponents.Light.NoActionBar">
-        
+
         <item name="colorPrimary">@color/primary</item>
         <item name="colorPrimaryVariant">@color/primary_dark</item>
         <item name="colorOnPrimary">@color/white</item>
-        
+
         <item name="colorSecondary">@color/primary_light</item>
         <item name="colorSecondaryVariant">@color/primary</item>
         <item name="colorOnSecondary">@color/white</item>
-        
+
         <item name="android:statusBarColor" tools:targetApi="l">?attr/colorPrimaryVariant</item>
-        
 
         <item name="actionMenuTextColor">@color/primary_text</item>
 
         <item name="android:forceDarkAllowed" tools:targetApi="q">false</item>
+
+        <item name="android:fontFamily">@font/inter</item>
+        <item name="fontFamily">@font/inter</item>
     </style>
 
     <style name="ToolBarColorStyle" parent="ThemeOverlay.AppCompat.ActionBar">
@@ -30,15 +32,75 @@
     </style>
 
 
+    <!-- Legacy "old purple" alert style (kept so any straggler references still
+         work). New code should prefer PhantomDialog / PhantomDialogTheme. -->
     <style name="PhantomDialogStyle" parent="Theme.MaterialComponents.Dialog">
-        <item name="colorPrimary">#6C3FC7</item>
-        <item name="android:background">#1A1628</item>
-        <item name="android:textColorPrimary">#C4A8FF</item>
-        <item name="android:textColorSecondary">#7A5AB0</item>
+        <item name="colorPrimary">@color/phantom_accent</item>
+        <item name="android:background">@color/phantom_bg_tertiary</item>
+        <item name="android:textColorPrimary">@color/phantom_text_primary</item>
+        <item name="android:textColorSecondary">@color/phantom_text_secondary</item>
     </style>
 
     <style name="PhantomButtonStyle" parent="Widget.MaterialComponents.Button.TextButton">
-        <item name="android:textColor">#6C3FC7</item>
+        <item name="android:textColor">@color/phantom_accent</item>
+    </style>
+
+    <!-- For MaterialAlertDialogBuilder(context, R.style.PhantomDialog).
+         Used by SlotAppAdapter fallback dialog. -->
+    <style name="PhantomDialog" parent="ThemeOverlay.MaterialComponents.MaterialAlertDialog">
+        <item name="colorPrimary">@color/phantom_accent</item>
+        <item name="colorOnPrimary">@color/phantom_text_primary</item>
+        <item name="colorSurface">@color/phantom_bg_tertiary</item>
+        <item name="colorOnSurface">@color/phantom_text_primary</item>
+        <item name="android:textColorPrimary">@color/phantom_text_primary</item>
+        <item name="android:textColorSecondary">@color/phantom_text_secondary</item>
+        <item name="materialAlertDialogTitleTextStyle">@style/PhantomDialog.Title</item>
+        <item name="materialAlertDialogBodyTextStyle">@style/PhantomDialog.Body</item>
+        <item name="buttonBarPositiveButtonStyle">@style/PhantomDialog.PositiveButton</item>
+        <item name="buttonBarNegativeButtonStyle">@style/PhantomDialog.NegativeButton</item>
+        <item name="buttonBarNeutralButtonStyle">@style/PhantomDialog.NegativeButton</item>
+        <item name="dialogCornerRadius">@dimen/card_radius</item>
+    </style>
+
+    <style name="PhantomDialog.Title" parent="MaterialAlertDialog.MaterialComponents.Title.Text">
+        <item name="android:textColor">@color/phantom_text_primary</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="PhantomDialog.Body" parent="MaterialAlertDialog.MaterialComponents.Body.Text">
+        <item name="android:textColor">@color/phantom_text_secondary</item>
+    </style>
+
+    <style name="PhantomDialog.PositiveButton" parent="Widget.MaterialComponents.Button.TextButton.Dialog">
+        <item name="android:textColor">@color/phantom_text_primary</item>
+        <item name="backgroundTint">@color/phantom_accent</item>
+    </style>
+
+    <style name="PhantomDialog.NegativeButton" parent="Widget.MaterialComponents.Button.TextButton.Dialog">
+        <item name="android:textColor">@color/phantom_text_secondary</item>
+    </style>
+
+    <!-- Transparent-window theme for custom AlertDialog with setView(layout).
+         Use: AlertDialog.Builder(context, R.style.PhantomDialogTheme)
+                 .setView(layout).create() -->
+    <style name="PhantomDialogTheme" parent="Theme.AppCompat.Dialog">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowMinWidthMajor">90%</item>
+        <item name="android:windowMinWidthMinor">90%</item>
+        <item name="android:fontFamily">@font/inter</item>
+        <item name="fontFamily">@font/inter</item>
+    </style>
+
+    <!-- Theme for SlotActionsBottomSheet -->
+    <style name="PhantomBottomSheetTheme" parent="Theme.Design.BottomSheetDialog">
+        <item name="bottomSheetStyle">@style/PhantomBottomSheetStyle</item>
+        <item name="android:fontFamily">@font/inter</item>
+        <item name="fontFamily">@font/inter</item>
+        <item name="android:navigationBarColor">@color/phantom_bg_secondary</item>
+    </style>
+
+    <style name="PhantomBottomSheetStyle" parent="Widget.Design.BottomSheet.Modal">
+        <item name="android:background">@drawable/bg_bottom_sheet</item>
     </style>
 
 </resources>

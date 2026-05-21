@@ -91,7 +91,10 @@ class SlotAppAdapter(
                 popup.show()
             } catch (e: Exception) {
                 // Fallback dialog si popup échoue
-                android.app.AlertDialog.Builder(context)
+                com.google.android.material.dialog.MaterialAlertDialogBuilder(
+                    context,
+                    top.niunaijun.blackboxa.R.style.PhantomDialog,
+                )
                     .setTitle("Désinstaller")
                     .setMessage("Supprimer ${app.packageName.substringAfterLast(".")} de ce slot ?")
                     .setPositiveButton("Supprimer") { _, _ -> onAppDelete(app) }

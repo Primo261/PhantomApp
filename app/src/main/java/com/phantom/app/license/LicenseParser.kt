@@ -1,6 +1,7 @@
 package com.phantom.app.license
 
 import android.util.Log
+import com.phantom.app.util.Slog
 
 data class ParsedLicense(val rawBytes: ByteArray) {
     override fun equals(other: Any?): Boolean {
@@ -22,7 +23,7 @@ object LicenseParser {
     fun isValidFormat(key: String): Boolean {
         val normalized = normalize(key) ?: return false
         val ok = FORMAT_REGEX.matches(normalized)
-        Log.d(TAG, "isValidFormat($normalized) = $ok")
+        Slog.d(TAG, "isValidFormat($normalized) = $ok")
         return ok
     }
 
@@ -41,7 +42,7 @@ object LicenseParser {
         }
         return try {
             val bytes = CrockfordBase32.decode(stripped)
-            Log.d(TAG, "parse: decoded ${bytes.size} bytes from '$normalized'")
+            Slog.d(TAG, "parse: decoded ${bytes.size} bytes from '$normalized'")
             ParsedLicense(bytes)
         } catch (e: Exception) {
             Log.e(TAG, "parse: decode failed: ${e.message}")

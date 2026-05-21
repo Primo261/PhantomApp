@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
+import com.phantom.app.util.Slog
 import androidx.security.crypto.MasterKey
 import java.util.UUID
 
@@ -19,15 +20,16 @@ object LicenseStorage {
 
     private const val TAG = LicenseConfig.LOG_TAG
     private const val FILE_NAME = "phantom_license_secure"
-    private const val FALLBACK_FILE_NAME = "phantom_license_plain"
 
     private const val KEY_LICENSE = "LICENSE_KEY"
     private const val KEY_DEVICE_ID = "DEVICE_ID"
     private const val KEY_PAYLOAD_JSON = "PAYLOAD_JSON"
     private const val KEY_SIGNATURE_HEX = "SIGNATURE_HEX"
     private const val KEY_LAST_VERIFIED = "LAST_VERIFIED_AT"
+    private const val KEY_LAST_KNOWN_TIME = "LAST_KNOWN_TIME"
 
     @Volatile private var prefs: SharedPreferences? = null
+    private val writeLock = Any()
 
     private fun prefs(context: Context): SharedPreferences {
         prefs?.let { return it }
@@ -46,12 +48,17 @@ object LicenseStorage {
                     EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
                 )
             } catch (e: Exception) {
-                // androidx.security can fail on some weird OEM ROMs / corrupted
-                // keystore states. Fall back to plain prefs so we don't brick the
-                // app — the license payload is still Ed25519-signed so a tamperer
-                // can't forge a valid record anyway.
-                Log.e(TAG, "EncryptedSharedPreferences init failed, falling back: ${e.message}")
-                ctx.getSharedPreferences(FALLBACK_FILE_NAME, Context.MODE_PRIVATE)
+                // Fail-fast: if AndroidKeyStore is broken we MUST NOT silently
+                // fall back to plain SharedPreferences — that would expose the
+                // license payload + signature + deviceId in clear on disk and
+                // (combined with allowBackup=true) let an attacker exfiltrate
+                // them. The caller (LicenseGuard / Activity) catches this and
+                // surfaces the error to the user.
+                Log.e(TAG, "EncryptedSharedPreferences create failed - SECURITY ERROR", e)
+                throw IllegalStateException(
+                    "Cannot initialize secure storage. Device crypto broken.",
+                    e
+                )
             }
             prefs = sp
             return sp
@@ -62,12 +69,14 @@ object LicenseStorage {
         val sp = prefs(context)
         val existing = sp.getString(KEY_DEVICE_ID, null)
         if (existing != null) {
-            Log.d(TAG, "getOrCreateDeviceId: existing=$existing")
+            Slog.d(TAG, "getOrCreateDeviceId: existing=$existing")
             return existing
         }
         val newId = UUID.randomUUID().toString()
-        sp.edit().putString(KEY_DEVICE_ID, newId).apply()
-        Log.d(TAG, "getOrCreateDeviceId: created=$newId")
+        synchronized(writeLock) {
+            sp.edit().putString(KEY_DEVICE_ID, newId).apply()
+        }
+        Slog.d(TAG, "getOrCreateDeviceId: created=$newId")
         return newId
     }
 
@@ -77,27 +86,51 @@ object LicenseStorage {
         payload: LicensePayload,
         signatureHex: String
     ) {
-        Log.d(TAG, "saveActivation: license=${licenseKey.take(16)}… expires=${payload.expires_at}")
-        prefs(context).edit()
-            .putString(KEY_LICENSE, licenseKey)
-            .putString(KEY_PAYLOAD_JSON, payload.toCanonicalJson())
-            .putString(KEY_SIGNATURE_HEX, signatureHex)
-            .putLong(KEY_LAST_VERIFIED, System.currentTimeMillis())
-            .apply()
+        Slog.d(TAG, "saveActivation: license=${licenseKey.take(16)}… expires=${payload.expires_at}")
+        val now = System.currentTimeMillis()
+        synchronized(writeLock) {
+            prefs(context).edit()
+                .putString(KEY_LICENSE, licenseKey)
+                .putString(KEY_PAYLOAD_JSON, payload.toCanonicalJson())
+                .putString(KEY_SIGNATURE_HEX, signatureHex)
+                .putLong(KEY_LAST_VERIFIED, now)
+                .putLong(KEY_LAST_KNOWN_TIME, now)
+                .apply()
+        }
     }
 
     fun updateLastVerified(context: Context, ts: Long = System.currentTimeMillis()) {
-        prefs(context).edit().putLong(KEY_LAST_VERIFIED, ts).apply()
+        synchronized(writeLock) {
+            prefs(context).edit()
+                .putLong(KEY_LAST_VERIFIED, ts)
+                .putLong(KEY_LAST_KNOWN_TIME, ts)
+                .apply()
+        }
     }
+
+    /**
+     * Last `System.currentTimeMillis()` we observed and trusted (server-validated
+     * activation or successful re-verify). Used to detect clock rollback: if the
+     * current wall-clock is significantly earlier than this value, the user has
+     * almost certainly turned off NTP and rolled their device clock back to keep
+     * an expired license alive.
+     */
+    fun getLastKnownTime(context: Context): Long =
+        prefs(context).getLong(KEY_LAST_KNOWN_TIME, 0L)
 
     fun clearLicense(context: Context) {
         Log.w(TAG, "clearLicense: wiping stored activation")
-        val sp = prefs(context)
-        val deviceId = sp.getString(KEY_DEVICE_ID, null)
-        sp.edit().clear().apply()
-        // Preserve deviceId across re-activations.
-        if (deviceId != null) {
-            sp.edit().putString(KEY_DEVICE_ID, deviceId).apply()
+        synchronized(writeLock) {
+            val sp = prefs(context)
+            val deviceId = sp.getString(KEY_DEVICE_ID, null)
+            val editor = sp.edit().clear()
+            // Preserve deviceId across re-activations (single transactional
+            // commit so the prefs file is never observable in a half-cleared
+            // state by a concurrent reader).
+            if (deviceId != null) {
+                editor.putString(KEY_DEVICE_ID, deviceId)
+            }
+            editor.apply()
         }
     }
 

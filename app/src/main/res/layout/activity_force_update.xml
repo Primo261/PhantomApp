@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true"
+    android:background="@drawable/bg_activation_gradient">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="@dimen/spacing_lg">
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="60dp"/>
+
+        <ImageView
+            android:layout_width="match_parent"
+            android:layout_height="192dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/logo_phantom"
+            android:contentDescription="@null"
+            tools:ignore="ImageContrastCheck"/>
+
+        <ImageView
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="@dimen/spacing_lg"
+            android:src="@drawable/ic_update"
+            android:tint="@color/phantom_accent_bright"
+            android:contentDescription="@null"/>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/spacing_md"
+            android:text="Mise à jour requise"
+            android:textColor="@color/phantom_text_primary"
+            android:textSize="@dimen/text_display"
+            android:textStyle="bold"
+            android:fontFamily="@font/inter"
+            android:gravity="center"
+            tools:ignore="HardcodedText"/>
+
+        <TextView
+            android:id="@+id/tv_version"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/spacing_xs"
+            android:textColor="@color/phantom_text_secondary"
+            android:textSize="@dimen/text_body"
+            android:fontFamily="@font/inter"
+            android:gravity="center"
+            tools:text="Version 1.0.2 disponible"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/spacing_lg"
+            android:orientation="vertical"
+            android:background="@drawable/bg_card_phantom"
+            android:padding="20dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="NOUVEAUTÉS"
+                android:textSize="@dimen/text_micro"
+                android:textStyle="bold"
+                android:textColor="@color/phantom_text_purple_subtle"
+                android:letterSpacing="0.1"
+                android:fontFamily="@font/inter"
+                tools:ignore="HardcodedText"/>
+
+            <TextView
+                android:id="@+id/tv_notes"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/spacing_sm"
+                android:textColor="@color/phantom_text_primary"
+                android:textSize="@dimen/text_body"
+                android:fontFamily="@font/inter"
+                tools:text="Corrections de bugs et améliorations."/>
+        </LinearLayout>
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:minHeight="@dimen/spacing_xl"/>
+
+        <Button
+            android:id="@+id/btn_download"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginTop="@dimen/spacing_lg"
+            android:background="@drawable/bg_button_primary"
+            app:backgroundTint="@null"
+            android:textColor="@color/phantom_text_primary"
+            android:textStyle="bold"
+            android:textSize="@dimen/text_body"
+            android:fontFamily="@font/inter"
+            android:text="Télécharger la mise à jour"
+            android:elevation="8dp"
+            android:stateListAnimator="@null"
+            tools:ignore="HardcodedText"/>
+
+        <Button
+            android:id="@+id/btn_quit"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginTop="12dp"
+            android:layout_marginBottom="@dimen/spacing_xl"
+            android:background="@drawable/bg_button_secondary"
+            app:backgroundTint="@null"
+            android:textColor="@color/phantom_text_secondary"
+            android:fontFamily="@font/inter"
+            android:text="Quitter l'app"
+            android:stateListAnimator="@null"
+            tools:ignore="HardcodedText"/>
+
+    </LinearLayout>
+</ScrollView>

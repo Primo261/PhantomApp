@@ -11,8 +11,16 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.afollestad.materialdialogs.MaterialDialog
+import com.google.android.material.snackbar.Snackbar
 import com.phantom.app.license.LicenseGuard
+import com.phantom.app.license.LicenseWatchdog
+import com.phantom.app.news.NewsApi
+import com.phantom.app.news.NewsBanner
 import com.phantom.app.ui.ActivationActivity
+import com.phantom.app.ui.ForceUpdateActivity
+import com.phantom.app.ui.LicenseInfoActivity
+import com.phantom.app.update.UpdateChecker
+import com.phantom.app.update.UpdateState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -22,15 +30,17 @@ import top.niunaijun.blackboxa.R
 import top.niunaijun.blackboxa.databinding.ActivityMainBinding
 import top.niunaijun.blackboxa.util.inflate
 import top.niunaijun.blackboxa.view.base.LoadingActivity
-import top.niunaijun.blackboxa.view.fake.FakeManagerActivity
 import top.niunaijun.blackboxa.view.list.ListActivity
-import top.niunaijun.blackboxa.view.setting.SettingActivity
 import java.io.File
 
 class MainActivity : LoadingActivity() {
 
     private val viewBinding: ActivityMainBinding by inflate()
     private lateinit var slotCardAdapter: SlotCardAdapter
+    private var newsBanner: NewsBanner? = null
+    // Toolbar / FAB views are now inline in activity_main.xml as
+    // btn_license_info / btn_fab (exposed via viewBinding) — the old
+    // view_toolbar include and its ivLogo/ivSettings ids are gone.
 
     companion object {
         private const val TAG = "MainActivity"
@@ -45,7 +55,18 @@ class MainActivity : LoadingActivity() {
         try {
             super.onCreate(savedInstanceState)
 
-            if (!LicenseGuard.isValid(this)) {
+            // Local-only gate. No network, no coroutine suspension — sub-50ms
+            // total (signature verify + expiry check + clock-rollback check).
+            // This replaces the previous synchronous `runBlocking` that could
+            // sit up to 6s waiting on /api/verify and produce an ANR.
+            val localOk = try {
+                LicenseGuard.isValidLocalOnly(this@MainActivity)
+            } catch (e: Exception) {
+                Log.e(TAG, "License local gate threw: ${e.message}", e)
+                false
+            }
+            if (!localOk) {
+                Log.w(TAG, "License local gate refused boot -> ActivationActivity")
                 startActivity(Intent(this, ActivationActivity::class.java))
                 finish()
                 return
@@ -71,33 +92,134 @@ class MainActivity : LoadingActivity() {
 
             try { BlackBoxCore.get().onAfterMainActivityOnCreate(this) }
             catch (e: Exception) { Log.e(TAG, "onAfter: ${e.message}") }
+
+            // Background online reverify. If the server says invalid we wipe
+            // and kick to ActivationActivity. Network failures (timeout, etc.)
+            // are silent — the watchdog and the next cold-boot will retry.
+            backgroundReverify()
         } catch (e: Exception) {
             Log.e(TAG, "Critical onCreate: ${e.message}")
             showErrorDialog("Failed to initialize: ${e.message}")
         }
     }
 
+    private fun backgroundReverify() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val outcome = try {
+                LicenseGuard.reverifyOnce(this@MainActivity)
+            } catch (e: Exception) {
+                Log.w(TAG, "backgroundReverify threw: ${e.message}")
+                return@launch
+            }
+            if (outcome == LicenseGuard.OnlineReverifyOutcome.INVALID ||
+                outcome == LicenseGuard.OnlineReverifyOutcome.NO_LICENSE) {
+                withContext(Dispatchers.Main) {
+                    if (isFinishing || isDestroyed) return@withContext
+                    Log.w(TAG, "backgroundReverify: $outcome -> ActivationActivity")
+                    startActivity(
+                        Intent(this@MainActivity, ActivationActivity::class.java)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                    )
+                    finish()
+                }
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        LicenseWatchdog.start(this)
+        checkForUpdates()
+        fetchNews()
+    }
+
+    override fun onPause() {
+        LicenseWatchdog.stop()
+        super.onPause()
+    }
+
+    // ─── Update gate ──────────────────────────────────────────────────────────
+
+    @Volatile private var updateCheckInFlight = false
+
+    private fun checkForUpdates() {
+        if (updateCheckInFlight) return
+        updateCheckInFlight = true
+        lifecycleScope.launch {
+            try {
+                val state = try {
+                    UpdateChecker.check(this@MainActivity)
+                } catch (e: Exception) {
+                    Log.w(TAG, "UpdateChecker threw: ${e.message}")
+                    UpdateState.UpToDate
+                }
+                if (isFinishing || isDestroyed) return@launch
+                when (state) {
+                    is UpdateState.Force -> {
+                        Log.w(TAG, "Update FORCED -> ForceUpdateActivity")
+                        ForceUpdateActivity.start(
+                            this@MainActivity,
+                            state.updateUrl,
+                            state.latestVersion,
+                            state.releaseNotes,
+                        )
+                    }
+                    is UpdateState.Optional -> {
+                        Log.d(TAG, "Update available (optional)")
+                        showOptionalUpdateSnackbar(state)
+                    }
+                    is UpdateState.UpToDate -> {
+                        Log.d(TAG, "App is up to date")
+                    }
+                }
+            } finally {
+                updateCheckInFlight = false
+            }
+        }
+    }
+
+    private fun fetchNews() {
+        val rootView = findViewById<android.view.View>(R.id.news_banner_root) ?: return
+        lifecycleScope.launch {
+            val item = try {
+                NewsApi.fetch()
+            } catch (e: Exception) {
+                Log.w(TAG, "fetchNews threw: ${e.message}")
+                null
+            }
+            if (isFinishing || isDestroyed) return@launch
+            try {
+                val banner = newsBanner ?: NewsBanner(rootView).also { newsBanner = it }
+                banner.render(item)
+            } catch (e: Exception) {
+                Log.w(TAG, "fetchNews: render failed: ${e.message}")
+            }
+        }
+    }
+
+    private fun showOptionalUpdateSnackbar(state: UpdateState.Optional) {
+        try {
+            Snackbar.make(
+                viewBinding.root,
+                "Mise à jour disponible (${state.latestVersion})",
+                Snackbar.LENGTH_LONG,
+            ).setAction("Mettre à jour") {
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(state.updateUrl)))
+                } catch (e: Exception) {
+                    Log.e(TAG, "openUpdateUrl failed: ${e.message}")
+                }
+            }.show()
+        } catch (e: Exception) {
+            Log.w(TAG, "snackbar show failed: ${e.message}")
+        }
+    }
+
     // ─── Header ───────────────────────────────────────────────────────────────
 
     private fun setupPhantomHeader() {
-        viewBinding.toolbarLayout.ivSettings.setOnClickListener { view ->
-            val popup = androidx.appcompat.widget.PopupMenu(this, view)
-            popup.inflate(R.menu.menu_main)
-            popup.setOnMenuItemClickListener { item ->
-                when (item.itemId) {
-                    R.id.main_setting -> SettingActivity.start(this)
-                    R.id.main_git -> startActivity(
-                        Intent(Intent.ACTION_VIEW,
-                            Uri.parse("https://github.com/Primo261/PhantomApp"))
-                    )
-                    R.id.fake_location -> startActivity(
-                        Intent(this, FakeManagerActivity::class.java)
-                            .also { it.putExtra("userID", 0) }
-                    )
-                }
-                true
-            }
-            popup.show()
+        viewBinding.btnLicenseInfo.setOnClickListener {
+            LicenseInfoActivity.start(this)
         }
     }
 
@@ -105,11 +227,11 @@ class MainActivity : LoadingActivity() {
 
     private fun initSlotRecyclerView() {
         slotCardAdapter = SlotCardAdapter(
-            context     = this,
-            onLaunchApp = { pkg, userId -> launchApp(pkg, userId) },
-            onAddApp    = { userId -> openAppPicker(userId) },
-            onResetSlot = { userId, _ -> slotCardAdapter.refreshSlot(userId) },
-            onAppDelete = { app: ApplicationInfo, userId -> deleteApp(app.packageName, userId) }
+            context      = this,
+            onLaunchApp  = { pkg, userId -> launchApp(pkg, userId) },
+            onAddApp     = { userId -> openAppPicker(userId) },
+            onDeleteSlot = { userId -> onSlotDeleted(userId) },
+            onAppDelete  = { app: ApplicationInfo, userId -> deleteApp(app.packageName, userId) }
         )
         viewBinding.slotsRecyclerView.apply {
             layoutManager = LinearLayoutManager(this@MainActivity)
@@ -134,7 +256,11 @@ class MainActivity : LoadingActivity() {
     }
 
     private fun initFab() {
-        viewBinding.fab.setOnClickListener { addNewSlot() }
+        viewBinding.btnFab.setOnClickListener { addNewSlot() }
+    }
+
+    private fun onSlotDeleted(@Suppress("UNUSED_PARAMETER") userId: Int) {
+        refreshSlots()
     }
 
     private fun addNewSlot() {

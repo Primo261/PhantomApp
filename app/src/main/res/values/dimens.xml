@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Typography -->
+    <dimen name="text_display">36sp</dimen>
+    <dimen name="text_h1">26sp</dimen>
+    <dimen name="text_h2">20sp</dimen>
+    <dimen name="text_body">16sp</dimen>
+    <dimen name="text_caption">13sp</dimen>
+    <dimen name="text_micro">11sp</dimen>
+
+    <!-- Spacing -->
+    <dimen name="spacing_xs">4dp</dimen>
+    <dimen name="spacing_sm">8dp</dimen>
+    <dimen name="spacing_md">16dp</dimen>
+    <dimen name="spacing_lg">24dp</dimen>
+    <dimen name="spacing_xl">32dp</dimen>
+    <dimen name="spacing_xxl">48dp</dimen>
+
+    <!-- Radii -->
+    <dimen name="card_radius">20dp</dimen>
+    <dimen name="card_radius_large">28dp</dimen>
+    <dimen name="input_radius">14dp</dimen>
+    <dimen name="button_radius">14dp</dimen>
+    <dimen name="pill_radius">100dp</dimen>
+</resources>

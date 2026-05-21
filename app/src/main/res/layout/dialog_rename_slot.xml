@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/bg_dialog"
+    android:padding="@dimen/spacing_lg">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Renommer le slot"
+        android:textSize="@dimen/text_h2"
+        android:textStyle="bold"
+        android:textColor="@color/phantom_text_primary"
+        android:fontFamily="@font/inter"
+        android:layout_marginBottom="@dimen/spacing_sm"
+        tools:ignore="HardcodedText"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Choisissez un nouveau nom"
+        android:textSize="@dimen/text_caption"
+        android:textColor="@color/phantom_text_secondary"
+        android:fontFamily="@font/inter"
+        android:layout_marginBottom="@dimen/spacing_lg"
+        tools:ignore="HardcodedText"/>
+
+    <EditText
+        android:id="@+id/rename_input"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:background="@drawable/input_phantom_state"
+        android:textColor="@color/phantom_text_primary"
+        android:textColorHint="@color/phantom_text_tertiary"
+        android:textSize="@dimen/text_body"
+        android:fontFamily="@font/inter"
+        android:paddingHorizontal="@dimen/spacing_md"
+        android:hint="Nom du slot"
+        android:singleLine="true"
+        android:importantForAutofill="no"
+        tools:ignore="HardcodedText,LabelFor"/>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/spacing_lg"
+        android:orientation="horizontal"
+        android:gravity="end">
+
+        <Button
+            android:id="@+id/btn_cancel"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:background="@android:color/transparent"
+            app:backgroundTint="@null"
+            android:textColor="@color/phantom_text_secondary"
+            android:fontFamily="@font/inter"
+            android:paddingHorizontal="20dp"
+            android:text="Annuler"
+            android:stateListAnimator="@null"
+            tools:ignore="HardcodedText"/>
+
+        <Button
+            android:id="@+id/btn_save"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:layout_marginStart="@dimen/spacing_sm"
+            android:background="@drawable/bg_button_primary"
+            app:backgroundTint="@null"
+            android:textColor="@color/phantom_text_primary"
+            android:textStyle="bold"
+            android:fontFamily="@font/inter"
+            android:paddingHorizontal="@dimen/spacing_lg"
+            android:text="Enregistrer"
+            android:stateListAnimator="@null"
+            tools:ignore="HardcodedText"/>
+    </LinearLayout>
+</LinearLayout>

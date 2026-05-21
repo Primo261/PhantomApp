@@ -22,3 +22,11 @@ local.properties
 .reference/
 phantom-release.jks
 keystore.properties
+
+# Local development
+.claude/
+
+# Decompilation references (NEVER commit - third-party IP)
+base-decompiled/
+waxmoon-decompiled/
+*-decompiled/

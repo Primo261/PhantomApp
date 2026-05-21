@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Legacy aliases used by Theme.BlackBox + a few view bindings. Kept so we
+         don't have to rewrite the base theme; the new design references the
+         phantom_* tokens below. -->
     <color name="primary">#3F3F3F</color>
     <color name="primary_dark">#3F3F3F</color>
     <color name="primary_light">#3F3F3F</color>
@@ -7,4 +10,25 @@
     <color name="primary_text">#212121</color>
     <color name="secondary_text">#757575</color>
     <color name="white">#FFFFFFFF</color>
+
+    <!-- PLZ Phantom palette -->
+    <color name="phantom_bg_primary">#08060F</color>
+    <color name="phantom_bg_secondary">#14101F</color>
+    <color name="phantom_bg_tertiary">#1A1525</color>
+    <color name="phantom_bg_elevated">#221C30</color>
+    <color name="phantom_accent">#8B5CF6</color>
+    <color name="phantom_accent_bright">#A78BFA</color>
+    <color name="phantom_accent_dim">#6C3FC7</color>
+    <color name="phantom_accent_deep">#5B21B6</color>
+    <color name="phantom_text_primary">#FFFFFF</color>
+    <color name="phantom_text_secondary">#B0B0C7</color>
+    <color name="phantom_text_tertiary">#6E6A85</color>
+    <color name="phantom_text_purple_subtle">#C4B5FD</color>
+    <color name="phantom_border_subtle">#1F1A2D</color>
+    <color name="phantom_border_accent">#3D2A6B</color>
+    <color name="phantom_recommended">#FACC15</color>
+    <color name="phantom_success">#10B981</color>
+    <color name="phantom_warning">#F59E0B</color>
+    <color name="phantom_error">#EF4444</color>
+    <color name="phantom_overlay">#CC08060F</color>
 </resources>

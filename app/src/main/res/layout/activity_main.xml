@@ -1,40 +1,93 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout
+<androidx.coordinatorlayout.widget.CoordinatorLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#0D0B14">
+    android:background="@color/phantom_bg_primary">
 
-    <include
-        android:id="@+id/toolbar_layout"
-        layout="@layout/view_toolbar"
+    <!-- Ambient animated code-rain decoration, drawn under everything. -->
+    <com.phantom.app.ui.CodeRainView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"/>
+
+    <!-- AppBar: header (hide on scroll-down / show on scroll-up) + pinned
+         news banner. Elevation/lift disabled to keep the flat dark look;
+         no Material shadow line between the bar and the slot list. -->
+    <com.google.android.material.appbar.AppBarLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        app:layout_constraintTop_toTopOf="parent"/>
+        android:background="@color/phantom_bg_primary"
+        app:elevation="0dp"
+        app:liftOnScroll="false">
+
+        <!-- Big centered logo + floating settings -->
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingTop="24dp"
+            android:paddingBottom="12dp"
+            app:layout_scrollFlags="scroll|enterAlways|snap">
+
+            <ImageView
+                android:layout_width="match_parent"
+                android:layout_height="112dp"
+                android:scaleType="fitCenter"
+                android:adjustViewBounds="true"
+                android:src="@drawable/logo_phantom"
+                android:layout_gravity="center"
+                android:contentDescription="PhantomApp"
+                tools:ignore="HardcodedText"/>
+
+            <ImageView
+                android:id="@+id/btn_license_info"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:padding="@dimen/spacing_xs"
+                android:src="@drawable/ic_settings"
+                app:tint="@color/phantom_accent_bright"
+                android:layout_gravity="end|top"
+                android:layout_marginEnd="20dp"
+                android:layout_marginTop="16dp"
+                android:clickable="true"
+                android:focusable="true"
+                android:foreground="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Ma licence"
+                tools:ignore="HardcodedText,UnusedAttribute"/>
+        </FrameLayout>
+
+        <!-- News banner: pinned (no scroll flag), stays visible even when
+             the header above hides. -->
+        <include layout="@layout/news_banner"/>
+
+    </com.google.android.material.appbar.AppBarLayout>
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/slotsRecyclerView"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:paddingTop="8dp"
-        android:paddingBottom="80dp"
+        android:layout_height="match_parent"
+        android:paddingTop="@dimen/spacing_sm"
+        android:paddingBottom="100dp"
         android:clipToPadding="false"
         android:overScrollMode="never"
-        app:layout_constraintTop_toBottomOf="@id/toolbar_layout"
-        app:layout_constraintBottom_toBottomOf="parent"/>
+        app:layout_behavior="@string/appbar_scrolling_view_behavior"/>
 
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/fab"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+    <ImageView
+        android:id="@+id/btn_fab"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:layout_gravity="bottom|end"
+        android:layout_marginBottom="@dimen/spacing_lg"
         android:layout_marginEnd="20dp"
-        android:layout_marginBottom="20dp"
-        android:src="@drawable/ic_add"
-        android:contentDescription="Add slot"
-        app:backgroundTint="#6C3FC7"
-        app:tint="@android:color/white"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintBottom_toBottomOf="parent"/>
+        android:background="@drawable/bg_fab"
+        android:src="@drawable/ic_plus"
+        android:tint="@color/phantom_text_primary"
+        android:elevation="12dp"
+        android:scaleType="center"
+        android:contentDescription="Nouveau slot"
+        android:clickable="true"
+        android:focusable="true"
+        tools:ignore="HardcodedText"/>
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

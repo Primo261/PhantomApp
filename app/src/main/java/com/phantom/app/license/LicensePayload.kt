@@ -1,6 +1,7 @@
 package com.phantom.app.license
 
 import android.util.Log
+import com.phantom.app.util.Slog
 import org.json.JSONObject
 
 data class LicensePayload(
@@ -8,20 +9,30 @@ data class LicensePayload(
     val email: String,
     val issued_at: Long,
     val expires_at: Long,
-    val label: String
+    val label: String?
 ) {
     /**
-     * Canonical JSON: keys sorted alphabetically, no whitespace, UTF-8.
-     * Must match exactly the server-side canonicalization used to sign.
+     * Canonical JSON used for Ed25519 verification.
+     *
+     * Must reproduce byte-for-byte what the server's sign.ts canonicalizePayload()
+     * produced at sign time. That function builds the object in this exact order:
+     *
+     *   { license_id, email, issued_at, expires_at, label }
+     *
+     * and serializes with JSON.stringify, which preserves insertion order and
+     * drops keys whose value is undefined. So when label was absent at sign time
+     * (legacy pre-label licenses), the canonical bytes contain no "label" key.
      */
     fun toCanonicalJson(): String {
         val sb = StringBuilder()
         sb.append('{')
+        sb.append("\"license_id\":").append(jsonString(license_id)).append(',')
         sb.append("\"email\":").append(jsonString(email)).append(',')
-        sb.append("\"expires_at\":").append(expires_at).append(',')
         sb.append("\"issued_at\":").append(issued_at).append(',')
-        sb.append("\"label\":").append(jsonString(label)).append(',')
-        sb.append("\"license_id\":").append(jsonString(license_id))
+        sb.append("\"expires_at\":").append(expires_at)
+        if (label != null) {
+            sb.append(',').append("\"label\":").append(jsonString(label))
+        }
         sb.append('}')
         return sb.toString()
     }
@@ -30,14 +41,17 @@ data class LicensePayload(
         private const val TAG = LicenseConfig.LOG_TAG
 
         fun fromJson(json: String): LicensePayload {
-            Log.d(TAG, "LicensePayload.fromJson: parsing ${json.length} chars")
+            Slog.d(TAG, "LicensePayload.fromJson: parsing ${json.length} chars")
             val obj = JSONObject(json)
+            val labelValue = if (obj.has("label") && !obj.isNull("label")) {
+                obj.getString("label")
+            } else null
             return LicensePayload(
                 license_id = obj.getString("license_id"),
                 email = obj.getString("email"),
                 issued_at = obj.getLong("issued_at"),
                 expires_at = obj.getLong("expires_at"),
-                label = obj.optString("label", "")
+                label = labelValue
             )
         }
 

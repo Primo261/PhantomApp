@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/news_banner_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:layout_marginHorizontal="@dimen/spacing_md"
+    android:layout_marginTop="12dp"
+    android:background="@drawable/bg_card_phantom"
+    android:padding="@dimen/spacing_md"
+    android:gravity="center_vertical"
+    android:visibility="gone"
+    tools:visibility="visible">
+
+    <ImageView
+        android:id="@+id/news_icon"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_marginEnd="12dp"
+        android:src="@drawable/ic_info"
+        android:tint="@color/phantom_accent_bright"
+        android:contentDescription="@null"/>
+
+    <TextView
+        android:id="@+id/news_message"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:textColor="@color/phantom_text_primary"
+        android:textSize="@dimen/text_body"
+        android:fontFamily="@font/inter"
+        tools:text="Serveurs OK · Bug Xiaomi MIUI fixé en v1.0.1"/>
+
+    <ImageView
+        android:id="@+id/news_close"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:padding="@dimen/spacing_sm"
+        android:src="@drawable/ic_close"
+        android:tint="@color/phantom_text_tertiary"
+        android:clickable="true"
+        android:focusable="true"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="Fermer"
+        tools:ignore="HardcodedText,UnusedAttribute"/>
+</LinearLayout>

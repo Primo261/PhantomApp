@@ -21,14 +21,30 @@
 #-renamesourcefileattribute SourceFile
 
 -keep class top.niunaijun.blackbox.** {*; }
+-keep class top.niunaijun.blackboxa.** { *; }
 -keep class top.niunaijun.jnihook.** {*; }
 -keep class mirror.** {*; }
 -keep class android.** {*; }
 -keep class com.android.** {*; }
 
+# BouncyCastle (Ed25519 verifier backing)
+-keep class org.bouncycastle.** { *; }
+-dontwarn org.bouncycastle.**
+
+# PhantomApp license classes — JSONObject/reflection-based field access
+-keep class com.phantom.app.license.** { *; }
+
 # HiddenApiBypass (LSPosed) — reflection target for Build.* spoofing in slots
 -keep class org.lsposed.hiddenapibypass.** { *; }
 -dontwarn org.lsposed.hiddenapibypass.**
+
+# Strip debug/verbose log calls from the release build. The Slog wrapper
+# already short-circuits on BuildConfig.DEBUG, but with -assumenosideeffects
+# R8 also removes the call sites + the string concatenations that fed them.
+-assumenosideeffects class com.phantom.app.util.Slog {
+    public static void d(...);
+    public static void v(...);
+}
 
 -keep class top.niunaijun.blackreflection.** {*; }
 -keep @top.niunaijun.blackreflection.annotation.BClass class * {*;}

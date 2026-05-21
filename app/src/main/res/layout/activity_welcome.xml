@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center_horizontal"
+    android:background="@drawable/bg_activation_gradient"
+    android:paddingHorizontal="32dp">
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="2"/>
+
+    <ImageView
+        android:id="@+id/splash_logo"
+        android:layout_width="match_parent"
+        android:layout_height="240dp"
+        android:scaleType="fitCenter"
+        android:adjustViewBounds="true"
+        android:src="@drawable/logo_phantom"
+        android:alpha="0"
+        android:contentDescription="@null"
+        tools:ignore="ImageContrastCheck"/>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="48dp"/>
+
+    <LinearLayout
+        android:id="@+id/splash_log_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="start"
+        android:minHeight="140dp"/>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"/>
+
+    <ProgressBar
+        android:id="@+id/splash_progress"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="6dp"
+        android:progressDrawable="@drawable/progress_bar_hacking"
+        android:max="100"
+        android:progress="0"/>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="16dp"/>
+
+    <TextView
+        android:id="@+id/splash_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Initialisation..."
+        android:textColor="@color/phantom_text_tertiary"
+        android:textSize="@dimen/text_caption"
+        android:fontFamily="monospace"
+        android:gravity="center"
+        tools:ignore="HardcodedText"/>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="48dp"/>
+
+</LinearLayout>

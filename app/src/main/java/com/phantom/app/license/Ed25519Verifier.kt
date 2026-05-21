@@ -1,6 +1,7 @@
 package com.phantom.app.license
 
 import android.util.Log
+import com.phantom.app.util.Slog
 import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters
 import org.bouncycastle.crypto.signers.Ed25519Signer
 
@@ -24,7 +25,7 @@ object Ed25519Verifier {
             signer.init(false, pubKey)
             signer.update(message, 0, message.size)
             val ok = signer.verifySignature(signature)
-            Log.d(TAG, "Ed25519.verify(msg=${message.size}B, sig=64B) -> $ok")
+            Slog.d(TAG, "Ed25519.verify(msg=${message.size}B, sig=64B) -> $ok")
             ok
         } catch (e: Exception) {
             Log.e(TAG, "Ed25519.verify failed: ${e.message}")

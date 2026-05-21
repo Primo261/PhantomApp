@@ -1,6 +1,7 @@
 package com.phantom.app.license
 
 import android.util.Log
+import com.phantom.app.util.Slog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -8,6 +9,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
+import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 data class VerifyRequest(
@@ -44,14 +46,22 @@ object LicenseApi {
     suspend fun verifyOnline(req: VerifyRequest): Result<VerifyResponse> =
         withContext(Dispatchers.IO) {
             try {
-                Log.d(TAG, "verifyOnline: POST ${LicenseConfig.VERIFY_API_URL} key=${req.licenseKey.take(16)}… device=${req.deviceId}")
                 val body = JSONObject().apply {
-                    put("license_key", req.licenseKey)
-                    put("device_id", req.deviceId)
-                    req.deviceInfo?.let { info ->
-                        put("device_info", JSONObject(info as Map<*, *>))
+                    put("licenseKey", req.licenseKey)
+                    put("deviceId", req.deviceId)
+                    val info = req.deviceInfo
+                    if (!info.isNullOrEmpty()) {
+                        val infoJson = JSONObject()
+                        for ((k, v) in info) {
+                            infoJson.put(k, v)
+                        }
+                        put("deviceInfo", infoJson)
                     }
                 }.toString()
+
+                Slog.d(TAG, "verifyOnline: REQUEST URL = ${LicenseConfig.VERIFY_API_URL}")
+                Slog.d(TAG, "verifyOnline: REQUEST HEADERS = Content-Type: $JSON, Accept: application/json, User-Agent: PhantomApp-License/1.0")
+                Slog.d(TAG, "verifyOnline: REQUEST BODY = $body")
 
                 val request = Request.Builder()
                     .url(LicenseConfig.VERIFY_API_URL)
@@ -63,10 +73,15 @@ object LicenseApi {
                 client.newCall(request).execute().use { resp ->
                     val code = resp.code
                     val text = resp.body?.string().orEmpty()
-                    Log.d(TAG, "verifyOnline: HTTP $code (${text.length} bytes)")
-                    if (!resp.isSuccessful && code !in 400..499) {
+                    Slog.d(TAG, "verifyOnline: RESPONSE CODE = $code")
+                    Slog.d(TAG, "verifyOnline: RESPONSE BODY = $text")
+                    // Strict: any non-2xx response = failure. Server must return
+                    // 200 with {valid:false, reason:…} for "license invalid";
+                    // anything else is treated as an unreachable/broken endpoint
+                    // so the client can fall back to the offline grace path.
+                    if (!resp.isSuccessful) {
                         return@withContext Result.failure(
-                            RuntimeException("HTTP $code: ${text.take(200)}")
+                            IOException("HTTP $code")
                         )
                     }
                     val parsed = parseResponse(text)

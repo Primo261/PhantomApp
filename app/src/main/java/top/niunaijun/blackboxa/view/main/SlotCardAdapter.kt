@@ -1,6 +1,5 @@
 package top.niunaijun.blackboxa.view.main
 
-import android.app.AlertDialog
 import android.content.Context
 import android.content.SharedPreferences
 import android.content.pm.ApplicationInfo
@@ -10,8 +9,11 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
+import androidx.appcompat.app.AlertDialog
+import androidx.fragment.app.FragmentActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import top.niunaijun.blackbox.BlackBoxCore
@@ -22,7 +24,7 @@ class SlotCardAdapter(
     private val context: Context,
     private val onLaunchApp: (packageName: String, userId: Int) -> Unit,
     private val onAddApp: (userId: Int) -> Unit,
-    private val onResetSlot: (userId: Int, position: Int) -> Unit,
+    private val onDeleteSlot: (userId: Int) -> Unit,
     private val onAppDelete: (ApplicationInfo, userId: Int) -> Unit
 ) : RecyclerView.Adapter<SlotCardAdapter.SlotViewHolder>() {
 
@@ -79,14 +81,14 @@ class SlotCardAdapter(
 
     // ── ViewHolder ────────────────────────────────────────────────────────────
 
-    inner class SlotViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-        private val tvSlotName:  TextView    = view.findViewById(R.id.tvSlotName)
-        private val tvFpId:      TextView    = view.findViewById(R.id.tvFpId)
-        private val tvModel:     TextView    = view.findViewById(R.id.tvModel)
-        private val tvImei:      TextView    = view.findViewById(R.id.tvImei)
-        private val tvAndroidId: TextView    = view.findViewById(R.id.tvAndroidId)
-        private val rvApps:      RecyclerView= view.findViewById(R.id.rvAppsInSlot)
-        private val btnReset:    TextView    = view.findViewById(R.id.btnReset)
+    inner class SlotViewHolder(private val rootView: View) : RecyclerView.ViewHolder(rootView) {
+        private val tvSlotName:  TextView    = rootView.findViewById(R.id.tvSlotName)
+        private val tvFpId:      TextView    = rootView.findViewById(R.id.tvFpId)
+        private val tvModel:     TextView    = rootView.findViewById(R.id.tvModel)
+        private val tvImei:      TextView    = rootView.findViewById(R.id.tvImei)
+        private val tvAndroidId: TextView    = rootView.findViewById(R.id.tvAndroidId)
+        private val rvApps:      RecyclerView= rootView.findViewById(R.id.rvAppsInSlot)
+        private val btnDelete:   View        = rootView.findViewById(R.id.btn_delete_slot)
 
         fun bind(slot: SlotData) {
             val userId = slot.userId
@@ -94,15 +96,22 @@ class SlotCardAdapter(
             // ── Nom du slot ───────────────────────────────────────────────────
             tvSlotName.text = getSlotName(userId)
 
-            // Tap court = rien / Long press = rename dialog
-            tvSlotName.setOnLongClickListener {
-                showRenameDialog(userId)
+            // Tap directly on the name → rename. No pencil icon: the ripple
+            // feedback on the TextView is the affordance (padding 4dp +
+            // selectableItemBackgroundBorderless).
+            tvSlotName.setOnClickListener { showRenameDialog(userId) }
+
+            // Red X overlay → delete confirm.
+            btnDelete.setOnClickListener { showDeleteDialog(userId) }
+
+            // Long-press anywhere on the card opens the actions bottom sheet
+            // (rename / delete in a single sheet — kept as a backup affordance).
+            val longPress = View.OnLongClickListener {
+                showActionsSheet(userId)
                 true
             }
-            // Tap court aussi pour UX friendly
-            tvSlotName.setOnClickListener {
-                showRenameDialog(userId)
-            }
+            rootView.setOnLongClickListener(longPress)
+            tvSlotName.setOnLongClickListener(longPress)
 
             // ── Fingerprint display ───────────────────────────────────────────
             try {
@@ -113,9 +122,9 @@ class SlotCardAdapter(
                     val model     = fp.getModel(userId)
 
                     tvFpId.text      = androidId.take(16)
-                    tvModel.text     = if (model.length > 10) model.take(10) + "…" else model
-                    tvImei.text      = if (imei.length > 8) imei.take(8) + "···" else imei
-                    tvAndroidId.text = if (androidId.length > 8) androidId.take(8) + "···" else androidId
+                    tvModel.text     = if (model.length > 12) model.take(12) + "…" else model
+                    tvImei.text      = if (imei.length > 10) imei.take(10) + "···" else imei
+                    tvAndroidId.text = if (androidId.length > 10) androidId.take(10) + "···" else androidId
                 } else {
                     setFpGenerating()
                 }
@@ -138,44 +147,66 @@ class SlotCardAdapter(
             )
             rvApps.adapter = appAdapter
             rvApps.isNestedScrollingEnabled = false
-
-            // ── Reset button ──────────────────────────────────────────────────
-            btnReset.setOnClickListener {
-                try {
-                    FingerprintManager.get()?.resetSlot(userId)
-                    val pos = adapterPosition
-                    if (pos != RecyclerView.NO_ID.toInt()) notifyItemChanged(pos)
-                } catch (e: Exception) {
-                    Log.w(TAG, "Reset error slot $userId: ${e.message}")
-                }
-                onResetSlot(userId, adapterPosition)
-            }
         }
 
-        // ── Dialog rename ─────────────────────────────────────────────────────
+        // ── Bottom sheet ──────────────────────────────────────────────────────
+
+        private fun showActionsSheet(userId: Int) {
+            val activity = context as? FragmentActivity ?: return
+            val sheet = SlotActionsBottomSheet().configure(
+                slotName = getSlotName(userId),
+                onRename = { showRenameDialog(userId) },
+                onDelete = { showDeleteDialog(userId) },
+            )
+            sheet.show(activity.supportFragmentManager, "slot_actions_${userId}")
+        }
+
+        // ── Custom rename dialog ──────────────────────────────────────────────
+
         private fun showRenameDialog(userId: Int) {
-            val editText = EditText(context).apply {
-                inputType   = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
+            val view = LayoutInflater.from(context)
+                .inflate(R.layout.dialog_rename_slot, null, false)
+            val input = view.findViewById<EditText>(R.id.rename_input).apply {
+                inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
+                filters = arrayOf(InputFilter.LengthFilter(20))
                 setText(getSlotName(userId))
                 selectAll()
-                filters     = arrayOf(InputFilter.LengthFilter(20))
-                hint        = "Ex: Compte Vinted 2"
-                setTextColor(0xFFC4A8FF.toInt())
-                setHintTextColor(0xFF4A3870.toInt())
-                background  = null
-                setPadding(32, 24, 32, 16)
             }
 
-            AlertDialog.Builder(context, R.style.PhantomDialogStyle)
-                .setTitle("Renommer le slot")
-                .setView(editText)
-                .setPositiveButton("Valider") { _, _ ->
-                    val newName = editText.text.toString().trim().ifBlank { "Slot ${userId + 1}" }
-                    saveSlotName(userId, newName)
-                    tvSlotName.text = newName
+            val dialog = AlertDialog.Builder(context, R.style.PhantomDialogTheme)
+                .setView(view)
+                .create()
+
+            view.findViewById<Button>(R.id.btn_cancel).setOnClickListener { dialog.dismiss() }
+            view.findViewById<Button>(R.id.btn_save).setOnClickListener {
+                val newName = input.text.toString().trim().ifBlank { "Slot ${userId + 1}" }
+                saveSlotName(userId, newName)
+                tvSlotName.text = newName
+                dialog.dismiss()
+            }
+            dialog.show()
+        }
+
+        // ── Custom delete dialog ──────────────────────────────────────────────
+
+        private fun showDeleteDialog(userId: Int) {
+            val view = LayoutInflater.from(context)
+                .inflate(R.layout.dialog_delete_slot, null, false)
+            val dialog = AlertDialog.Builder(context, R.style.PhantomDialogTheme)
+                .setView(view)
+                .create()
+
+            view.findViewById<Button>(R.id.btn_cancel).setOnClickListener { dialog.dismiss() }
+            view.findViewById<Button>(R.id.btn_confirm).setOnClickListener {
+                dialog.dismiss()
+                try {
+                    BlackBoxCore.get().deleteUser(userId)
+                } catch (e: Exception) {
+                    Log.e(TAG, "deleteUser($userId) failed: ${e.message}", e)
                 }
-                .setNegativeButton("Annuler", null)
-                .show()
+                onDeleteSlot(userId)
+            }
+            dialog.show()
         }
 
         private fun setFpGenerating() {

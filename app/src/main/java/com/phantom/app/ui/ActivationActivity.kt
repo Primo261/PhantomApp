@@ -1,13 +1,19 @@
 package com.phantom.app.ui
 
+import android.animation.ValueAnimator
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.LayerDrawable
+import android.graphics.drawable.RippleDrawable
 import android.net.Uri
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
 import android.util.Log
 import android.view.View
+import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.EditText
@@ -34,6 +40,7 @@ class ActivationActivity : AppCompatActivity() {
     private lateinit var loading: ProgressBar
     private lateinit var errorText: TextView
     private lateinit var contactLink: TextView
+    private var shimmerAnimator: ValueAnimator? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,6 +57,48 @@ class ActivationActivity : AppCompatActivity() {
 
         activateBtn.setOnClickListener { onActivateClicked() }
         contactLink.setOnClickListener { openWhatsApp() }
+
+        startShimmer()
+    }
+
+    private fun startShimmer() {
+        // Layered drawable: ripple → layer-list → [gradient, border stroke].
+        // We animate the border stroke alpha from ~40% to 100% in a 1.5s loop,
+        // giving the button a subtle "alive" pulse on the violet outline.
+        // mutate() so we get an isolated copy — without this, setStroke()
+        // below would mutate the shared ConstantState and pulse every other
+        // button that draws bg_button_primary too.
+        val ripple = (activateBtn.background as? RippleDrawable)
+            ?.mutate() as? RippleDrawable ?: return
+        activateBtn.background = ripple
+        val layers = ripple.getDrawable(0) as? LayerDrawable ?: return
+        val border = layers.getDrawable(1) as? GradientDrawable ?: return
+        val strokeWidth = (2 * resources.displayMetrics.density).toInt()
+
+        shimmerAnimator?.cancel()
+        shimmerAnimator = ValueAnimator.ofInt(100, 255).apply {
+            duration = 1500
+            repeatMode = ValueAnimator.REVERSE
+            repeatCount = ValueAnimator.INFINITE
+            interpolator = AccelerateDecelerateInterpolator()
+            addUpdateListener {
+                val alpha = it.animatedValue as Int
+                border.setStroke(strokeWidth, Color.argb(alpha, 0xA7, 0x8B, 0xFA))
+            }
+            start()
+        }
+
+        activateBtn.elevation = 12 * resources.displayMetrics.density
+        if (android.os.Build.VERSION.SDK_INT >= 28) {
+            activateBtn.outlineAmbientShadowColor = Color.parseColor("#8B5CF6")
+            activateBtn.outlineSpotShadowColor = Color.parseColor("#A78BFA")
+        }
+    }
+
+    override fun onDestroy() {
+        shimmerAnimator?.cancel()
+        shimmerAnimator = null
+        super.onDestroy()
     }
 
     private fun onActivateClicked() {
@@ -93,7 +142,7 @@ class ActivationActivity : AppCompatActivity() {
     private fun openWhatsApp() {
         try {
             startActivity(
-                Intent(Intent.ACTION_VIEW, Uri.parse(LicenseConfig.WHATSAPP_CONTACT_URL))
+                Intent(Intent.ACTION_VIEW, Uri.parse(LicenseConfig.whatsappUrl()))
             )
         } catch (e: Exception) {
             Log.e(TAG, "openWhatsApp failed: ${e.message}")
